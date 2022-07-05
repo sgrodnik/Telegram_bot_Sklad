@@ -56,7 +56,7 @@ function greetUser() {
 
 function selectMat() {
   let matName = message.text.match(/".+?"/g)[0].replaceAll('"', '')
-  let matId = message.text.match(/\(.+?\)/g)[0]
+  let matId = message.text.match(/\(id.+?\)/g)[0].replaceAll('(id', '').replaceAll(')', '')
   PropertiesService.getScriptProperties().setProperty(message.from.id, matName + ',id=' + matId)
   let text = `Введите количество для списания`
   let keyboard = {inline_keyboard:
@@ -133,7 +133,7 @@ function now(date=0){
 }
 
 function clear(s) {
-  return s.replaceAll('\n', ' ').replaceAll('"', '');
+  return String(s).replaceAll('\n', ' ').replaceAll('"', '');
 }
 
 function tableAppend(){
@@ -169,17 +169,17 @@ function processInlineQuery(){
   range.getValues().forEach(function(row){
     if(row[1].toLowerCase().includes(query.toLowerCase())) {
       counter++
-      const row8 = row[8];
+      const row8 = Math.round(row[8] * 100) / 100
       const s = String(row8);
       try {
-        const ostatok = s.replaceAll('.', ',');
+        const ostatok = s.replaceAll('.', ',')
         results.push({
           id: counter.toString(),
           type: 'article',
           title: `${counter.toString()}) ${row[1]} | ${row[2]} | ${row[3]}`,
           description: `Остаток ${ostatok} | Расположение: ${row[4]} ${row[5]} | id${row[0]}`,
           input_message_content: {
-            message_text: `Выбрать "${clear(row[1])}" (${clear(row[0])})`
+            message_text: `Выбрать "${clear(row[1])}" (id${clear(row[0])})`
           }
         })
       }
