@@ -56,7 +56,8 @@ function greetUser() {
 
 function selectMat() {
   let matName = message.text.match(/".+?"/g)[0].replaceAll('"', '')
-  PropertiesService.getScriptProperties().setProperty(message.from.id, matName)
+  let matId = message.text.match(/\(.+?\)/g)[0]
+  PropertiesService.getScriptProperties().setProperty(message.from.id, matName + ',id=' + matId)
   let text = `Введите количество для списания`
   let keyboard = {inline_keyboard:
         [[{ "text": "Другая позиция 🔍", 'switch_inline_query_current_chat': '' }]]
@@ -78,7 +79,7 @@ function isFloat(str){
 function confirmWriteOff() {
   let amount = String(parseFloat(message.text.replace(',', '.'))).replace('.', ',')
   let properties = PropertiesService.getScriptProperties()
-  let matName = properties.getProperty(message.from.id);
+  let [matName, matId] = properties.getProperty(message.from.id).split(',id=')
   // sendMessage(message.from.id, amount.length)
   let text = `Подтвердите списание <b>${amount}</b> кг <b>${matName}</b> или введите другое количество`
   let keyboard = {inline_keyboard:
@@ -92,11 +93,23 @@ function writeOff() {
   const callbackQuery = update.callback_query;
   const amount = callbackQuery.data.replace('Списать ', '')
   const properties = PropertiesService.getScriptProperties()
-  const matName = properties.getProperty(callbackQuery.from.id);
-  const text = `👌 списано <b>${amount}</b> кг <b>${matName}</b> <tg-spoiler>(понарошку)</tg-spoiler>`
+  // const matName = properties.getProperty(callbackQuery.from.id)
+  const [matName, matId] = properties.getProperty(callbackQuery.from.id).split(',id=')
+  const text = `👌 списано <b>${amount}</b> кг <b>${matName}</b>`
   const message = callbackQuery.message;
   const date = toDate(message.date)
-  tableAppend(date, callbackQuery.from.id, matName, amount)
+  // function findId() {
+  //   const sheet = ssApp.getSheetByName('СКЛАД')
+  //   const range = sheet.getRange(2, 1, 500, 2)
+  //   for (const row of range.getValues()) {
+  //     // tableAppend(clear(row[1]).toLowerCase(), matName.toLowerCase())
+  //     if (clear(row[1]).toLowerCase() === matName.toLowerCase()) {
+  //       return row[0];
+  //     }
+  //   }
+  // }
+  // let matId = findId() || '?'
+  tableAppend(date, callbackQuery.from.id, matId, amount)
   editMessage(message.chat.id, message.message_id, text)
 }
 
@@ -117,6 +130,10 @@ function now(date=0){
   let mm = date.getMinutes()
   let ss = date.getSeconds()
   return `${y}.${m}.${d} ${hh}:${mm}:${ss}`
+}
+
+function clear(s) {
+  return s.replaceAll('\n', ' ').replaceAll('"', '');
 }
 
 function tableAppend(){
@@ -148,21 +165,30 @@ function processInlineQuery(){
   const sheet = ssApp.getSheetByName('СКЛАД')
   const range = sheet.getRange(2, 1, 500, 9)
   let counter = 0
+
   range.getValues().forEach(function(row){
-      // sendMessage(326258443, counter)
     if(row[1].toLowerCase().includes(query.toLowerCase())) {
       counter++
-      results.push({
-        id: counter.toString(),
-        type: 'article',
-        title: `${counter.toString()}) ${row[1]} | ${row[2]} | ${row[3]}`,
-        description: `Расположение: ${row[4]} ${row[5]} | Остаток ${String(row[8]).replaceAll('.', ',')}`,
-        input_message_content: {
-          message_text: `Выбрать "${row[1].replaceAll('\n', ' ').replaceAll('"', '')}"`
-        }
-      })
+      const row8 = row[8];
+      const s = String(row8);
+      try {
+        const ostatok = s.replaceAll('.', ',');
+        results.push({
+          id: counter.toString(),
+          type: 'article',
+          title: `${counter.toString()}) ${row[1]} | ${row[2]} | ${row[3]}`,
+          description: `Остаток ${ostatok} | Расположение: ${row[4]} ${row[5]} | id${row[0]}`,
+          input_message_content: {
+            message_text: `Выбрать "${clear(row[1])}" (${clear(row[0])})`
+          }
+        })
+      }
+      catch (e){
+        sendMessage(326258443, `${e}\nrow8=${typeof row8} ${row8}, s=${typeof s} ${s}`)
+      }
     }
   })
+  // sendMessage(326258443, '2')
   // sendMessage(326258443, results.length)
   if(results.length === 0){
     results.push({
