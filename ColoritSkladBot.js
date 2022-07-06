@@ -47,22 +47,52 @@ function processMessage(){
 }
 
 function greetUser() {
-  let text = `Привет, ${message.from.first_name || message.from.username}! Выберите материал для списания`
-  let keyboard = {inline_keyboard:
-        [[{ "text": "Поиск 🔍", 'switch_inline_query_current_chat': '' }]]
+  let text = `Привет, ${message.from.first_name || message.from.username}! Давай найдём материал:`
+  createButtonsByGroup()
+  let keyboard = {inline_keyboard: [
+      [{ "text": "Общий поиск 🔍", 'switch_inline_query_current_chat': '' }],
+      [{ "text": "RAL (36)", 'switch_inline_query_current_chat': 'RAL' },
+        { "text": "RS (4)", 'switch_inline_query_current_chat': 'RS' }],
+      [{ "text": "NCS S (43)", 'switch_inline_query_current_chat': 'NCS S' },
+        { "text": "Грунт (4)", 'switch_inline_query_current_chat': 'Грунт' }],
+      [{ "text": "Отвердитель (7)", 'switch_inline_query_current_chat': 'Отвердитель' },
+        { "text": "Растворитель (3)", 'switch_inline_query_current_chat': 'Растворитель' }],
+      [{ "text": "Лак (1)", 'switch_inline_query_current_chat': 'Лак' },
+        { "text": "2 (7)", 'switch_inline_query_current_chat': '2' }],
+      [{ "text": "tikurina (1)", 'switch_inline_query_current_chat': 'tikurina' }]
+    ]
   }
   sendMessage(message.from.id, text, keyboard)
 }
 
+function createButtonsByGroup() {
+  const groups = {}
+  for (const row of table) {
+    if (!(row[0] in groups)) {
+      groups[row[0]] = 0
+    }
+    groups[row[0]]++
+  }
+  const buttons = [[{ "text": "Общий поиск 🔍", 'switch_inline_query_current_chat': '' }]]
+  for (const groupName of groups) {
+    buttons.push([{ "text": `${groupName} (${groups[groupName]})`, 'switch_inline_query_current_chat': groupName}])
+  }
+  return buttons
+}
+
 function selectMat() {
-  let matName = message.text.match(/".+?"/g)[0].replaceAll('"', '')
-  let matId = message.text.match(/\(id.+?\)/g)[0].replaceAll('(id', '').replaceAll(')', '')
+  let [matName, matId, ostatok] = JSON.parse(message.text.replaceAll('Выбрать ', ''))
+  // let matName = message.text.match(/".+?"/g)[0].replaceAll('"', '')
+  // let matId = message.text.match(/\(id.+?\)/g)[0].replaceAll('(id', '').replaceAll(')', '')
+  // let value = JSON.stringify([matName, matId])
+  // sendMessage(message.from.id, ('a'.repeat(10000).length))
+  // PropertiesService.getScriptProperties().getProperty('qwe')
   PropertiesService.getScriptProperties().setProperty(message.from.id, matName + ',id=' + matId)
-  let text = `Введите количество для списания`
+  let text = `Введите количество ≤ ${ostatok}`
   let keyboard = {inline_keyboard:
         [[{ "text": "Другая позиция 🔍", 'switch_inline_query_current_chat': '' }]]
   }
-  sendMessage(message.from.id, text, keyboard)
+  sendMessage(message.from.id, text)
 }
 
 function isFloat(str){
@@ -83,20 +113,19 @@ function confirmWriteOff() {
   // sendMessage(message.from.id, amount.length)
   let text = `Подтвердите списание <b>${amount}</b> кг <b>${matName}</b> или введите другое количество`
   let keyboard = {inline_keyboard:
-        [[{ "text": `Списать ✓`, 'callback_data': `Списать ${amount}` },
-          { "text": "Другая позиция 🔍", 'switch_inline_query_current_chat': '' }]]
+        [[{ "text": `Списать ✓`, 'callback_data': `Списать ${amount}` }]]
   }
   sendMessage(message.from.id, text, keyboard)
 }
 
 function writeOff() {
-  const callbackQuery = update.callback_query;
+  const callbackQuery = update.callback_query
   const amount = callbackQuery.data.replace('Списать ', '')
   const properties = PropertiesService.getScriptProperties()
   // const matName = properties.getProperty(callbackQuery.from.id)
   const [matName, matId] = properties.getProperty(callbackQuery.from.id).split(',id=')
   const text = `👌 списано <b>${amount}</b> кг <b>${matName}</b>`
-  const message = callbackQuery.message;
+  const message = callbackQuery.message
   const date = toDate(message.date)
   // function findId() {
   //   const sheet = ssApp.getSheetByName('СКЛАД')
@@ -104,7 +133,7 @@ function writeOff() {
   //   for (const row of range.getValues()) {
   //     // tableAppend(clear(row[1]).toLowerCase(), matName.toLowerCase())
   //     if (clear(row[1]).toLowerCase() === matName.toLowerCase()) {
-  //       return row[0];
+  //       return row[0]
   //     }
   //   }
   // }
@@ -133,7 +162,7 @@ function now(date=0){
 }
 
 function clear(s) {
-  return String(s).replaceAll('\n', ' ').replaceAll('"', '');
+  return String(s).replaceAll('\n', ' ').replaceAll('"', '')
 }
 
 function tableAppend(){
@@ -155,39 +184,41 @@ function editMessage(chatId, messageId, text){
   let response = UrlFetchApp.fetch(base, data)
 }
 
+function getTable() {
+  const sheet = ssApp.getSheetByName('СКЛАД')
+  const range = sheet.getRange(2, 1, 500, 10)
+  return range.getValues()
+}
+
 function processInlineQuery(){
   const query = update.inline_query.query
-  if (!query || query.length < 3){
+  if (!query || query.length < 1){
     answerInlineQuery(update.inline_query.id, [])
     return
   }
   const results = []
-  const sheet = ssApp.getSheetByName('СКЛАД')
-  const range = sheet.getRange(2, 1, 500, 9)
-  let counter = 0
+  const table = getTable();
 
-  range.getValues().forEach(function(row){
-    if(row[1].toLowerCase().includes(query.toLowerCase())) {
-      counter++
-      const row8 = Math.round(row[8] * 100) / 100
-      const s = String(row8);
-      try {
-        const ostatok = s.replaceAll('.', ',')
-        results.push({
-          id: counter.toString(),
-          type: 'article',
-          title: `${counter.toString()}) ${row[1]} | ${row[2]} | ${row[3]}`,
-          description: `Остаток ${ostatok} | Расположение: ${row[4]} ${row[5]} | id${row[0]}`,
-          input_message_content: {
-            message_text: `Выбрать "${clear(row[1])}" (id${clear(row[0])})`
-          }
-        })
-      }
-      catch (e){
-        sendMessage(326258443, `${e}\nrow8=${typeof row8} ${row8}, s=${typeof s} ${s}`)
-      }
+  let counter = 0
+  for (const row of table) {
+    if(row[2].toLowerCase().includes(query.toLowerCase())) {
+    counter++
+    const row8 = Math.round(row[9] * 100) / 100
+    const s = String(row8)
+      const ostatok = s.replaceAll('.', ',')
+      const noZak = row[4] === '-' || row[4] === '' ? '' : ` | ${row[4]}`
+      const messageText = 'Выбрать ' + JSON.stringify([clear(row[2]), clear(row[1]), ostatok])
+      results.push({
+        id: counter.toString(),
+        type: 'article',
+        title: `${row[2]} | ${row[3]}${noZak}`,
+        description: `Остаток ${ostatok} кг | Расположение: ${row[5]} ${row[6]}`,
+        input_message_content: {
+          message_text: messageText
+        }
+      })
     }
-  })
+  }
   // sendMessage(326258443, '2')
   // sendMessage(326258443, results.length)
   if(results.length === 0){
@@ -200,7 +231,7 @@ function processInlineQuery(){
       }
     })
   }
-  answerInlineQuery(update.inline_query.id, results)
+  answerInlineQuery(update.inline_query.id, results.slice(0, 50))
 }
 
 function answerInlineQuery(inline_query_id, results){
@@ -210,7 +241,7 @@ function answerInlineQuery(inline_query_id, results){
       method: 'answerInlineQuery',
       inline_query_id: String(inline_query_id),
       results: JSON.stringify(results),
-      cache_time: 0
+      cache_time: Number(0)
     }
   }
   UrlFetchApp.fetch(base, data)
