@@ -49,35 +49,38 @@ function processMessage(){
 function greetUser() {
   let text = `Привет, ${message.from.first_name || message.from.username}! Давай найдём материал:`
   createButtonsByGroup()
-  let keyboard = {inline_keyboard: [
-      [{ "text": "Общий поиск 🔍", 'switch_inline_query_current_chat': '' }],
-      [{ "text": "RAL (36)", 'switch_inline_query_current_chat': 'RAL' },
-        { "text": "RS (4)", 'switch_inline_query_current_chat': 'RS' }],
-      [{ "text": "NCS S (43)", 'switch_inline_query_current_chat': 'NCS S' },
-        { "text": "Грунт (4)", 'switch_inline_query_current_chat': 'Грунт' }],
-      [{ "text": "Отвердитель (7)", 'switch_inline_query_current_chat': 'Отвердитель' },
-        { "text": "Растворитель (3)", 'switch_inline_query_current_chat': 'Растворитель' }],
-      [{ "text": "Лак (1)", 'switch_inline_query_current_chat': 'Лак' },
-        { "text": "2 (7)", 'switch_inline_query_current_chat': '2' }],
-      [{ "text": "tikurina (1)", 'switch_inline_query_current_chat': 'tikurina' }]
-    ]
-  }
+  let keyboard = {inline_keyboard: createButtonsByGroup()}
   sendMessage(message.from.id, text, keyboard)
 }
 
 function createButtonsByGroup() {
   const groups = {}
-  for (const row of table) {
+  for (const row of getTable()) {
+    if (row[0] === '') {continue}
     if (!(row[0] in groups)) {
       groups[row[0]] = 0
     }
     groups[row[0]]++
   }
-  const buttons = [[{ "text": "Общий поиск 🔍", 'switch_inline_query_current_chat': '' }]]
-  for (const groupName of groups) {
-    buttons.push([{ "text": `${groupName} (${groups[groupName]})`, 'switch_inline_query_current_chat': groupName}])
+  const buttons = [{ "text": "Общий поиск 🔍", 'switch_inline_query_current_chat': '' }]
+  for (const groupName in groups) {
+    buttons.push({ "text": `${groupName} (${groups[groupName]})`, 'switch_inline_query_current_chat': groupName})
   }
-  return buttons
+  const buttonRows = []
+  let count = buttons.length;
+  if ((count % 2) === 0){
+    for (const i of [...Array(count / 2).keys()]) {
+      buttonRows.push([buttons[i], buttons[i + count / 2]])
+    }
+  } else {
+    count--
+    buttonRows.push([buttons.shift()])
+    for (const i of [...Array(count / 2).keys()]) {
+      buttonRows.push([buttons[i], buttons[i + count / 2]])
+    }
+  }
+  // console.log(getTable())
+  return buttonRows
 }
 
 function selectMat() {
@@ -186,7 +189,7 @@ function editMessage(chatId, messageId, text){
 
 function getTable() {
   const sheet = ssApp.getSheetByName('СКЛАД')
-  const range = sheet.getRange(2, 1, 500, 10)
+  const range = sheet.getRange(3, 1, 500, 10)
   return range.getValues()
 }
 
