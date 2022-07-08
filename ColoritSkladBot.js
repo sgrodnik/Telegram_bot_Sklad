@@ -3,6 +3,7 @@ const base = 'https://api.telegram.org/bot' + token + '/'
 const fileBase = 'https://api.telegram.org/file/bot' + token + '/'
 const ssId = '1dldSXJPoAj0Ni5G-LuklyOhBIqTn_BIfkMt5oeO4EoI'
 const ssApp = SpreadsheetApp.openById(ssId)
+const props = PropertiesService.getScriptProperties()
 
 let update
 let message
@@ -30,7 +31,7 @@ function debug(){
     let properties = PropertiesService.getScriptProperties()
     properties.setProperty('qwe', 'asd')
     // sendMessage(SGrodnikChatId, JSON.stringify(PropertiesService.getScriptProperties(), null, 8))
-    sendMessage(SGrodnikChatId, PropertiesService.getScriptProperties().getProperties())
+    sendMessage(SGrodnikChatId, props.getProperties())
 
   // }
 }
@@ -38,7 +39,8 @@ function debug(){
 function processMessage(){
   message = update.message
   // if(!message){return}
-  if(message && message.text && message.text === '/start'){greetUser()}
+  if(message){storeMessageId()}
+  if(message && message.text && message.text.startsWith('/s')){greetUser()}
   if(message && message.text && message.text.startsWith('Выбрать')){selectMat()}
   if(message && message.text && isFloat(message.text)){confirmWriteOff()}
   if(update.callback_query && update.callback_query.data.startsWith('Списать')){writeOff()}
@@ -46,11 +48,46 @@ function processMessage(){
   if(update.inline_query){processInlineQuery()}
 }
 
+function storeMessageId(fromId=null, messageId=null) {
+  const propName = `${fromId || message.from.id}messages`
+  let storage = props.getProperty(propName)
+  if (!storage) storage = []
+  else storage = JSON.parse(storage)
+  storage.push(messageId || message.message_id)
+  props.setProperty(propName, JSON.stringify(storage))
+}
+
+function storeReportToEditNextTime(fromId, messageId, text) {
+  const propName = `${fromId}messageToEdit`
+  props.setProperty(propName, JSON.stringify([messageId, text]))
+}
+
+function deleteMessages(chatId=null, senderId=null) {
+  const propName = `${senderId || message.from.id}messages`
+  let storage = props.getProperty(propName)
+  props.deleteProperty(propName)
+  if (!storage) storage = []
+  else storage = JSON.parse(storage)
+  for (const messageId of storage) {
+    deleteMessage(chatId || message.chat.id, messageId)
+  }
+}
+
+function editPrevReport(chatId) {
+  const propName = `${chatId}messageToEdit`
+  let storage = props.getProperty(propName)
+  if (!storage) return
+  props.deleteProperty(propName)
+  let [messageId, text] = JSON.parse(storage)
+  editMessage(chatId, messageId, text)
+}
+
 function greetUser() {
   let text = `Привет, ${message.from.first_name || message.from.username}! Давай найдём материал:`
   createButtonsByGroup()
   let keyboard = {inline_keyboard: createButtonsByGroup()}
-  sendMessage(message.from.id, text, keyboard)
+  let [chatId, messageId] = sendMessage(message.from.id, text, keyboard)
+  storeMessageId(chatId, messageId)
 }
 
 function createButtonsByGroup() {
@@ -84,18 +121,12 @@ function createButtonsByGroup() {
 }
 
 function selectMat() {
-  let [matName, matId, ostatok] = JSON.parse(message.text.replaceAll('Выбрать ', ''))
-  // let matName = message.text.match(/".+?"/g)[0].replaceAll('"', '')
-  // let matId = message.text.match(/\(id.+?\)/g)[0].replaceAll('(id', '').replaceAll(')', '')
-  // let value = JSON.stringify([matName, matId])
-  // sendMessage(message.from.id, ('a'.repeat(10000).length))
-  // PropertiesService.getScriptProperties().getProperty('qwe')
-  PropertiesService.getScriptProperties().setProperty(message.from.id, matName + ',id=' + matId)
-  let text = `Введите количество ≤ ${ostatok}`
-  let keyboard = {inline_keyboard:
-        [[{ "text": "Другая позиция 🔍", 'switch_inline_query_current_chat': '' }]]
-  }
-  sendMessage(message.from.id, text)
+  const mes = message.text.replaceAll('Выбрать ', '');
+  let [matName, _, ostatok, matId] = machinize(mes)
+  props.setProperty(message.from.id, matName + ',id=' + matId)
+  let text = `Введите количество ≤ ${ostatok} кг`
+  let [chatId, messageId] = sendMessage(message.from.id, text)
+  storeMessageId(chatId, messageId)
 }
 
 function isFloat(str){
@@ -130,19 +161,12 @@ function writeOff() {
   const text = `👌 списано <b>${amount}</b> кг <b>${matName}</b>`
   const message = callbackQuery.message
   const date = toDate(message.date)
-  // function findId() {
-  //   const sheet = ssApp.getSheetByName('СКЛАД')
-  //   const range = sheet.getRange(2, 1, 500, 2)
-  //   for (const row of range.getValues()) {
-  //     // tableAppend(clear(row[1]).toLowerCase(), matName.toLowerCase())
-  //     if (clear(row[1]).toLowerCase() === matName.toLowerCase()) {
-  //       return row[0]
-  //     }
-  //   }
-  // }
-  // let matId = findId() || '?'
   tableAppend(date, callbackQuery.from.id, matId, amount)
-  editMessage(message.chat.id, message.message_id, text)
+  const keyboard = {inline_keyboard: createButtonsByGroup()}
+  let [chatId, messageId] = editMessage(message.chat.id, message.message_id, text, keyboard)
+  deleteMessages(message.chat.id, callbackQuery.from.id)
+  editPrevReport(chatId)
+  storeReportToEditNextTime(chatId, messageId, text)
 }
 
 function toDate(unixTimestamp){
@@ -173,20 +197,6 @@ function tableAppend(){
   sheet.appendRow([].slice.call(arguments))
 }
 
-function editMessage(chatId, messageId, text){
-  let data = {
-    method: 'post',
-    payload: {
-      method: 'editMessageText',
-      chat_id: String(chatId),
-      message_id: Number(messageId),
-      text: text,
-      parse_mode: 'HTML'
-    }
-  }
-  let response = UrlFetchApp.fetch(base, data)
-}
-
 function getTable() {
   const sheet = ssApp.getSheetByName('СКЛАД')
   const range = sheet.getRange(3, 1, 500, 10)
@@ -203,19 +213,25 @@ function processInlineQuery(){
   const table = getTable();
 
   let counter = 0
+
   for (const row of table) {
-    if(row[2].toLowerCase().includes(query.toLowerCase())) {
-    counter++
-    const row8 = Math.round(row[9] * 100) / 100
-    const s = String(row8)
-      const ostatok = s.replaceAll('.', ',')
-      const noZak = row[4] === '-' || row[4] === '' ? '' : ` | ${row[4]}`
-      const messageText = 'Выбрать ' + JSON.stringify([clear(row[2]), clear(row[1]), ostatok])
+    const id = row[1]
+    const name = clear(row[2])
+    const supplyer = row[3]
+    const num = row[4]
+    const stellaj = row[5]
+    const polka = row[6]
+    const place = stellaj + polka
+    if(name.toLowerCase().includes(query.toLowerCase())) {
+      counter++
+      const ostatok = String(Math.round(row[9] * 100) / 100).replaceAll('.', ',')
+      const noZak = num === '-' || num === '' ? '' : ` | ${num}`
+      const messageText = 'Выбрать ' + humanize(name, place, ostatok, id)
       results.push({
         id: counter.toString(),
         type: 'article',
-        title: `${row[2]} | ${row[3]}${noZak}`,
-        description: `Остаток ${ostatok} кг | Расположение: ${row[5]} ${row[6]}`,
+        title: `${name} | ${supplyer}${noZak}`,
+        description: `Остаток ${ostatok} кг | Расположение: ${stellaj} ${polka}`,
         input_message_content: {
           message_text: messageText
         }
@@ -266,6 +282,55 @@ function sendMessage(chatId, text, keyboard=null){
   let chatId_ = JSON.parse(response.getContentText()).result.chat.id
   let messageId = JSON.parse(response.getContentText()).result.message_id
   return [chatId_, messageId]
+}
+
+function editMessage(chatId, messageId, text, keyboard=null){
+  let data = {
+    method: 'post',
+    payload: {
+      method: 'editMessageText',
+      chat_id: String(chatId),
+      message_id: Number(messageId),
+      text: text,
+      parse_mode: 'HTML',
+      reply_markup: keyboard ? JSON.stringify(keyboard) : ''
+    }
+  }
+  let response = UrlFetchApp.fetch(base, data)
+  let chatId_ = JSON.parse(response.getContentText()).result.chat.id
+  let messageId_ = JSON.parse(response.getContentText()).result.message_id
+  return [chatId_, messageId_]
+}
+
+function deleteMessage(chatId, messageId){
+  let data = {
+    method: 'post',
+    payload: {
+      method: 'deleteMessage',
+      chat_id: String(chatId),
+      message_id: Number(messageId)
+    }
+  }
+  let response = UrlFetchApp.fetch(base, data)
+}
+
+function humanize(name, place, ostatok, id) {
+  let s = JSON.stringify([name, 'Место ' + place, ostatok + ' кг', 'id' + id])
+  s = s.replace('["', ': ')
+  s = s.replace('"]', '')
+  s = s.replaceAll('","', ' | ')
+  return s
+}
+
+function machinize(s) {
+  s = s.replace(': ', '["')
+  s = s + '"]'
+  s = s.replaceAll(' | ', '","')
+  s = s.replaceAll('Место ', '')
+  s = s.replaceAll(' кг', '')
+  s = s.replaceAll('id', '')
+  const arr = JSON.parse(s);
+  return arr
 }
 
 function pass(){console.log(123)}
