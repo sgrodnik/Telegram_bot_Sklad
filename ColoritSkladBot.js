@@ -1,6 +1,5 @@
 // wrapper: https://script.google.com/home/projects/1xxcmtRKO5Xe7a0dBeZ_Ypo-s-5xgam9-loG-Nsd1RfcfGkpLa1CY0UYz/edit
 const base = 'https://api.telegram.org/bot' + token + '/'
-const fileBase = 'https://api.telegram.org/file/bot' + token + '/'
 const ssId = '1dldSXJPoAj0Ni5G-LuklyOhBIqTn_BIfkMt5oeO4EoI'
 const ssApp = SpreadsheetApp.openById(ssId)
 const props = PropertiesService.getScriptProperties()
@@ -27,18 +26,14 @@ function doPost(e){
 
 function debug(){
   const SGrodnikChatId = 326258443
-  // if(update.message && update.message.from.id === SGrodnikChatId){
     let properties = PropertiesService.getScriptProperties()
     properties.setProperty('qwe', 'asd')
-    // sendMessage(SGrodnikChatId, JSON.stringify(PropertiesService.getScriptProperties(), null, 8))
     sendMessage(SGrodnikChatId, props.getProperties())
 
-  // }
 }
 
 function processMessage(){
   message = update.message
-  // if(!message){return}
   if(message){storeMessageId()}
   if(message && message.text && message.text.startsWith('/s')){greetUser()}
   if(message && message.text && message.text.startsWith('Выбрать')){selectMat()}
@@ -172,7 +167,6 @@ function confirmWriteOff() {
   let amount = String(parseFloat(message.text.replace(',', '.'))).replace('.', ',')
   let properties = PropertiesService.getScriptProperties()
   let [matName, matId] = properties.getProperty(message.from.id).split(',id=')
-  // sendMessage(message.from.id, amount.length)
   let text = `Подтвердите списание <b>${amount}</b> кг <b>${matName}</b> или введите другое количество`
   let keyboard = {inline_keyboard:
         [[{ "text": `Списать ✓`, 'callback_data': `Списать ${amount}` }]]
@@ -184,7 +178,6 @@ function writeOff() {
   const callbackQuery = update.callback_query
   const amount = callbackQuery.data.replace('Списать ', '')
   const properties = PropertiesService.getScriptProperties()
-  // const matName = properties.getProperty(callbackQuery.from.id)
   const [matName, matId] = properties.getProperty(callbackQuery.from.id).split(',id=')
   const text = `👌 списано <b>${amount}</b> кг <b>${matName}</b>`
   const message = callbackQuery.message
@@ -269,8 +262,6 @@ function processInlineQuery(){
       })
     }
   }
-  // sendMessage(326258443, '2')
-  // sendMessage(326258443, results.length)
   if(results.length === 0){
     results.push({
       id: 1,
@@ -360,8 +351,7 @@ function machinize(s) {
   s = s.replaceAll('Место ', '')
   s = s.replaceAll(' кг', '')
   s = s.replaceAll('id', '')
-  const arr = JSON.parse(s);
-  return arr
+  return JSON.parse(s)
 }
 
 function pass(){console.log(123)}
