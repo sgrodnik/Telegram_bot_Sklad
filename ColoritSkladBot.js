@@ -84,7 +84,6 @@ function editPrevReport(chatId) {
 
 function greetUser() {
   let text = `Привет, ${message.from.first_name || message.from.username}! Давай найдём материал:`
-  createButtonsByGroup()
   let keyboard = {inline_keyboard: createButtonsByGroup()}
   let [chatId, messageId] = sendMessage(message.from.id, text, keyboard)
   storeMessageId(chatId, messageId)
@@ -116,7 +115,36 @@ function createButtonsByGroup() {
       buttonRows.push([buttons[i], buttons[i + count / 2]])
     }
   }
-  // console.log(getTable())
+  [].push.apply(buttonRows, createButtonsByOrderNumber())
+  return buttonRows
+}
+
+function createButtonsByOrderNumber() {
+  const orderNumbers = {}
+  for (const row of getTable()) {
+    if (row[4] === '') {continue}
+    if (!(row[4] in orderNumbers)) {
+      orderNumbers[row[4]] = 0
+    }
+    orderNumbers[row[4]]++
+  }
+  const buttons = []
+  for (const num in orderNumbers) {
+    buttons.push({ "text": `${num} (${orderNumbers[num]})`, 'switch_inline_query_current_chat': '#' + num})
+  }
+  const buttonRows = []
+  let count = buttons.length;
+  if ((count % 2) === 0){
+    for (const i of [...Array(count / 2).keys()]) {
+      buttonRows.push([buttons[i], buttons[i + count / 2]])
+    }
+  } else {
+    count--
+    buttonRows.push([buttons.shift()])
+    for (const i of [...Array(count / 2).keys()]) {
+      buttonRows.push([buttons[i], buttons[i + count / 2]])
+    }
+  }
   return buttonRows
 }
 
@@ -222,10 +250,13 @@ function processInlineQuery(){
     const stellaj = row[5]
     const polka = row[6]
     const place = stellaj + polka
-    if(name.toLowerCase().includes(query.toLowerCase())) {
+    const condition = query.startsWith('#') ?
+        '#' + num === query :
+        name.toLowerCase().includes(query.toLowerCase())
+    if(condition) {
       counter++
       const ostatok = String(Math.round(row[9] * 100) / 100).replaceAll('.', ',')
-      const noZak = num === '-' || num === '' ? '' : ` | ${num}`
+      const noZak = num === '-' || num === '' ? '' : ` | #${num}`
       const messageText = 'Выбрать ' + humanize(name, place, ostatok, id)
       results.push({
         id: counter.toString(),
