@@ -37,6 +37,7 @@ function processMessage(){
   if(message){storeMessageId()}
   if(message && message.text && message.text.startsWith('/s')){greetUser()}
   if(message && message.text && message.text.startsWith('Выбрать')){selectMat()}
+  if(message && message.text && message.text.startsWith('Заказ')){selectNum()}
   if(message && message.text && isFloat(message.text)){confirmWriteOff()}
   if(update.callback_query && update.callback_query.data.startsWith('Списать')){writeOff()}
   inline_query = update.inline_query
@@ -93,7 +94,7 @@ function createButtonsByGroup() {
     }
     groups[row[0]]++
   }
-  const buttons = [{ "text": "Общий поиск 🔍", 'switch_inline_query_current_chat': '' }]
+  const buttons = [{ "text": "🔍 Общий поиск", 'switch_inline_query_current_chat': '' }]
   for (const groupName in groups) {
     buttons.push({ "text": `${groupName} (${groups[groupName]})`, 'switch_inline_query_current_chat': groupName})
   }
@@ -110,7 +111,7 @@ function createButtonsByGroup() {
       buttonRows.push([buttons[i], buttons[i + count / 2]])
     }
   }
-  [].push.apply(buttonRows, createButtonsByOrderNumber())
+  buttonRows.push([{ "text": "🔍 По номеру заказа", 'switch_inline_query_current_chat': '#' }])
   return buttonRows
 }
 
@@ -149,6 +150,16 @@ function selectMat() {
   props.setProperty(message.from.id, matName + ',id=' + matId)
   let text = `Введите количество ≤ ${ostatok} кг`
   let [chatId, messageId] = sendMessage(message.from.id, text)
+  storeMessageId(chatId, messageId)
+}
+
+function selectNum() {
+  const num = message.text.replaceAll('Заказ ', '');
+  let keyboard = {inline_keyboard:
+        [[{ "text": `Показать позиции по заказу ${num}`,
+          'switch_inline_query_current_chat': '#${num}' }]]
+  }
+  let [chatId, messageId] = sendMessage(message.from.id, `-`, keyboard)
   storeMessageId(chatId, messageId)
 }
 
@@ -230,12 +241,13 @@ function processInlineQuery(){
     answerInlineQuery(update.inline_query.id, [])
     return
   }
+  if (query === '#'){
+    answerInlineQuery(update.inline_query.id, getOrderNumberInlineResults())
+    return
+  }
   const results = []
-  const table = getTable();
-
   let counter = 0
-
-  for (const row of table) {
+  for (const row of getTable()) {
     const id = row[1]
     const name = clear(row[2])
     const supplyer = row[3]
@@ -273,6 +285,32 @@ function processInlineQuery(){
     })
   }
   answerInlineQuery(update.inline_query.id, results.slice(0, 50))
+}
+
+function getOrderNumberInlineResults() {
+  const orderNumbers = {}
+  for (const row of getTable()) {
+    if (row[4] === '') {continue}
+    if (!(row[4] in orderNumbers)) {
+      orderNumbers[row[4]] = 0
+    }
+    orderNumbers[row[4]]++
+  }
+
+  const results = []
+  let counter = 0
+  for (const num of orderNumbers) {
+    counter++
+    results.push({
+      id: counter.toString(),
+      type: 'article',
+      title: `#${num} | ${orderNumbers[num]} шт.`,
+      input_message_content: {
+        message_text: 'Заказ ' + num
+      }
+    })
+  }
+  return results
 }
 
 function answerInlineQuery(inline_query_id, results){
