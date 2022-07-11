@@ -115,7 +115,7 @@ function createButtonsByGroup() {
       buttonRows.push([buttons[i], buttons[i + count / 2]])
     }
   }
-  buttonRows.push([{ "text": "🔍 По номеру заказа", 'switch_inline_query_current_chat': '#' }])
+  buttonRows.push([{ "text": "🔍 Поиск По номеру заказа", 'switch_inline_query_current_chat': '#' }])
   return buttonRows
 }
 
@@ -161,9 +161,9 @@ function selectNum() {
   const num = message.text.replaceAll('Заказ ', '');
   let keyboard = {inline_keyboard:
         [[{ "text": `Показать позиции по заказу ${num}`,
-          'switch_inline_query_current_chat': '#${num}' }]]
+          'switch_inline_query_current_chat': `#${num}` }]]
   }
-  let [chatId, messageId] = sendMessage(message.from.id, `-`, keyboard)
+  let [chatId, messageId] = sendMessage(message.from.id, `👇`, keyboard)
   storeMessageId(chatId, messageId)
 }
 
