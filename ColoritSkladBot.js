@@ -194,7 +194,6 @@ function writeOff() {
   const amount = callbackQuery.data.replace('Списать ', '')
   const properties = PropertiesService.getScriptProperties()
   const [matName, matId] = properties.getProperty(callbackQuery.from.id).split(',id=')
-  const text = `👌 списано <b>${amount}</b> кг <b>${matName}</b>`
   const message = callbackQuery.message
   const date = toDate(message.date)
   tableAppend(date, callbackQuery.from.id, matId, amount)
