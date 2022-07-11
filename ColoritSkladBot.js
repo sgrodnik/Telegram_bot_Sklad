@@ -88,11 +88,15 @@ function greetUser() {
 function createButtonsByGroup() {
   const groups = {}
   for (const row of getTable()) {
-    if (row[0] === '') {continue}
-    if (!(row[0] in groups)) {
-      groups[row[0]] = 0
+    const group = row[0]
+    if (group === '') {continue}
+    if (!(group in groups)) {
+      groups[group] = 0
     }
-    groups[row[0]]++
+    const ostatok = Number(row[9])
+    if (ostatok > 0){
+      groups[group]++
+    }
   }
   const buttons = [{ "text": "🔍 Общий поиск", 'switch_inline_query_current_chat': '' }]
   for (const groupName in groups) {
