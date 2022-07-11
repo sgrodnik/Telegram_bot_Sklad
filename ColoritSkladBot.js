@@ -88,7 +88,7 @@ function greetUser() {
 function createButtonsByGroup() {
   const groups = {}
   for (const row of getTable()) {
-    const group = row[0]
+    const group = row[1]
     if (group === '') {continue}
     if (!(group in groups)) {
       groups[group] = 0
@@ -170,7 +170,7 @@ function writeOff() {
   tableAppend(date, callbackQuery.from.id, matId, amount)
   let ostatok = '?'
   for (const row of getTable()) {
-    if(String(row[1]) === matId){
+    if(String(row[0]) === matId){
       ostatok = row[9]
     }
   }
@@ -207,13 +207,13 @@ function clear(s) {
 }
 
 function tableAppend(){
-  const sheet = ssApp.getSheetByName('ЖУРНАЛ')
+  const sheet = ssApp.getSheetByName('ЖУРНАЛ_ИСХОДНИК')
   sheet.appendRow([].slice.call(arguments))
 }
 
 function getTable() {
   const sheet = ssApp.getSheetByName('СКЛАД')
-  const range = sheet.getRange(3, 1, 500, 11)
+  const range = sheet.getRange(4, 1, 500, 11)
   return range.getValues()
 }
 
@@ -234,7 +234,7 @@ function getNameInlineResults(query) {
   let results = []
   let counter = 0
   for (const row of getTable()) {
-    const id = row[1]
+    const id = row[0]
     const name = clear(row[2])
     const supplyer = row[3]
     const num = row[4]
