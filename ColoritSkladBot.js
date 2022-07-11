@@ -198,6 +198,14 @@ function writeOff() {
   const message = callbackQuery.message
   const date = toDate(message.date)
   tableAppend(date, callbackQuery.from.id, matId, amount)
+  let ostatok = '?'
+  for (const row of getTable()) {
+    if(String(row[1]) === matId){
+      ostatok = row[9]
+    }
+  }
+  ostatok = String(Math.round(ostatok * 100) / 100).replaceAll('.', ',')
+  const text = `👌 списано <b>${amount}</b> кг <b>${matName}</b>, Остаток ${ostatok} кг`
   const keyboard = {inline_keyboard: createButtonsByGroup()}
   let [chatId, messageId] = editMessage(message.chat.id, message.message_id, text, keyboard)
   deleteMessages(message.chat.id, callbackQuery.from.id)
