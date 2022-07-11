@@ -36,6 +36,7 @@ function processMessage(){
   message = update.message
   if(message){storeMessageId()}
   if(message && message.text && message.text.startsWith('/s')){greetUser()}
+  if(message && message.text && message.text.startsWith('Обновить')){greetUser()}
   if(message && message.text && message.text.startsWith('Выбрать')){selectMat()}
   if(message && message.text && message.text.startsWith('Заказ')){selectNum()}
   if(message && message.text && isFloat(message.text)){confirmWriteOff()}
@@ -79,15 +80,31 @@ function editPrevReport(chatId) {
 }
 
 function greetUser() {
-  let text = `Привет, ${message.from.first_name || message.from.username}! Давай найдём материал:`
+  let text
+  const userName = message.from.first_name || message.from.username;
+  if(isUserAuthorized()) {
+    text = `Привет, ${userName}! Давай найдём материал:`
+  } else {
+    text = `Привет, ${userName}! Это демо-режим бота, т.к. твой id ${message.from.id} не зарегистрирован (списания не будут учтены в таблице)`
+  }
   let keyboard = {inline_keyboard: createButtonsByGroup()}
   let [chatId, messageId] = sendMessage(message.from.id, text, keyboard)
   storeMessageId(chatId, messageId)
 }
 
+function isUserAuthorized(userId=null) {
+  let id = userId || message.from.id
+  for (const row_ of getTableUser()){
+    if (id === row_[0]){
+      return true
+    }
+  }
+  return false
+}
+
 function createButtonsByGroup() {
   const groups = {}
-  for (const row of getTable()) {
+  for (const row of getTableStorage()) {
     const group = row[1]
     if (group === '') {continue}
     if (!(group in groups)) {
@@ -169,13 +186,14 @@ function writeOff() {
   const date = toDate(message.date)
   tableAppend(date, callbackQuery.from.id, matId, amount)
   let ostatok = '?'
-  for (const row of getTable()) {
+  for (const row of getTableStorage()) {
     if(String(row[0]) === matId){
       ostatok = row[9]
     }
   }
   ostatok = String(Math.round(ostatok * 100) / 100).replaceAll('.', ',')
-  const text = `👌 списано <b>${amount}</b> кг <b>${matName}</b>, Остаток ${ostatok} кг`
+  const demo = isUserAuthorized(callbackQuery.from.id) ? '' : ' <tg-spoiler>, Демо-режим</tg-spoiler>'
+  const text = `👌 списано <b>${amount}</b> кг <b>${matName}</b>, Остаток ${ostatok} кг${demo}`
   const keyboard = {inline_keyboard: createButtonsByGroup()}
   let [chatId, messageId] = editMessage(message.chat.id, message.message_id, text, keyboard)
   deleteMessages(message.chat.id, callbackQuery.from.id)
@@ -211,9 +229,15 @@ function tableAppend(){
   sheet.appendRow([].slice.call(arguments))
 }
 
-function getTable() {
+function getTableStorage() {
   const sheet = ssApp.getSheetByName('СКЛАД')
   const range = sheet.getRange(4, 1, 500, 11)
+  return range.getValues()
+}
+
+function getTableUser() {
+  const sheet = ssApp.getSheetByName('ПОЛЬЗОВАТЕЛИ')
+  const range = sheet.getRange(2, 1, 50, 1)
   return range.getValues()
 }
 
@@ -233,7 +257,7 @@ function processInlineQuery(){
 function getNameInlineResults(query) {
   let results = []
   let counter = 0
-  for (const row of getTable()) {
+  for (const row of getTableStorage()) {
     const id = row[0]
     const name = clear(row[2])
     const supplyer = row[3]
@@ -281,7 +305,7 @@ function fillIfEmpty(results, query) {
 
 function getOrderNumberInlineResults(query) {
   const orderNumbers = {}
-  for (const row of getTable()) {
+  for (const row of getTableStorage()) {
     const num = row[4];
     if (num === '') {continue}
     if (!(num in orderNumbers)) {
