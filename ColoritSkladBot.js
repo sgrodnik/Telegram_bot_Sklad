@@ -140,6 +140,7 @@ function selectMat() {
   const mes = message.text.replaceAll('Выбрать ', '');
   let [matName, _, ostatok, matId] = machinize(mes)
   props.setProperty(message.from.id, matName + ',id=' + matId)
+  props.setProperty(matId, ostatok)
   let text = `Введите количество ≤ ${ostatok} кг`
   let [chatId, messageId] = sendMessage(message.from.id, text)
   storeMessageId(chatId, messageId)
@@ -170,6 +171,13 @@ function confirmWriteOff() {
   let amount = String(parseFloat(message.text.replace(',', '.'))).replace('.', ',')
   let properties = PropertiesService.getScriptProperties()
   let [matName, matId] = properties.getProperty(message.from.id).split(',id=')
+  const ostatok = props.getProperty(matId);
+  if(parseFloat(amount.replace('.', ',')) > parseFloat(ostatok)){
+    let text = `Введите количество <b>≤ ${ostatok}</b> кг`
+    let [chatId, messageId] = sendMessage(message.from.id, text)
+    storeMessageId(chatId, messageId)
+    return
+  }
   let text = `Подтвердите списание <b>${amount}</b> кг <b>${matName}</b> или введите другое количество`
   let keyboard = {inline_keyboard:
         [[{ "text": `Списать ✓`, 'callback_data': `Списать ${amount}` }]]
@@ -191,6 +199,7 @@ function writeOff() {
       ostatok = row[9]
     }
   }
+  props.setProperty(matId, ostatok)
   ostatok = String(Math.round(ostatok * 100) / 100).replaceAll('.', ',')
   const demo = isUserAuthorized(callbackQuery.from.id) ? '' : ' <tg-spoiler>, Демо-режим</tg-spoiler>'
   const text = `👌 списано <b>${amount}</b> кг <b>${matName}</b>, Остаток ${ostatok} кг${demo}`
