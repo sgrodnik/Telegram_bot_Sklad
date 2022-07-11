@@ -242,7 +242,7 @@ function tableAppend(){
 
 function getTable() {
   const sheet = ssApp.getSheetByName('СКЛАД')
-  const range = sheet.getRange(3, 1, 500, 10)
+  const range = sheet.getRange(3, 1, 500, 11)
   return range.getValues()
 }
 
@@ -253,10 +253,14 @@ function processInlineQuery(){
     return
   }
   if (query === '#'){
-    answerInlineQuery(update.inline_query.id, getOrderNumberInlineResults())
+    answerInlineQuery(update.inline_query.id, getOrderNumberInlineResults(query).slice(0, 50))
     return
   }
-  const results = []
+  answerInlineQuery(update.inline_query.id, getNameInlineResults(query).slice(0, 50))
+}
+
+function getNameInlineResults(query) {
+  let results = []
   let counter = 0
   for (const row of getTable()) {
     const id = row[1]
@@ -269,7 +273,7 @@ function processInlineQuery(){
     const condition = query.startsWith('#') ?
         '#' + num === query :
         name.toLowerCase().includes(query.toLowerCase())
-    if(condition) {
+    if (condition) {
       counter++
       const ostatok = String(Math.round(row[9] * 100) / 100).replaceAll('.', ',')
       const noZak = num === '-' || num === '' ? '' : ` | #${num}`
@@ -281,11 +285,17 @@ function processInlineQuery(){
         description: `Остаток ${ostatok} кг | Расположение: ${stellaj} ${polka}`,
         input_message_content: {
           message_text: messageText
-        }
+        },
+        thumb_url: row[10]
       })
     }
   }
-  if(results.length === 0){
+  results = fillIfEmpty(results, query)
+  return results;
+}
+
+function fillIfEmpty(results, query) {
+  if (results.length === 0) {
     results.push({
       id: 1,
       type: 'article',
@@ -295,10 +305,10 @@ function processInlineQuery(){
       }
     })
   }
-  answerInlineQuery(update.inline_query.id, results.slice(0, 50))
+  return results
 }
 
-function getOrderNumberInlineResults() {
+function getOrderNumberInlineResults(query) {
   const orderNumbers = {}
   for (const row of getTable()) {
     if (row[4] === '') {continue}
@@ -308,9 +318,9 @@ function getOrderNumberInlineResults() {
     orderNumbers[row[4]]++
   }
 
-  const results = []
+  let results = []
   let counter = 0
-  for (const num of orderNumbers) {
+  for (const num in orderNumbers) {
     counter++
     results.push({
       id: counter.toString(),
@@ -321,6 +331,7 @@ function getOrderNumberInlineResults() {
       }
     })
   }
+  results = fillIfEmpty(results, query)
   return results
 }
 
