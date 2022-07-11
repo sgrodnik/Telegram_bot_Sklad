@@ -119,35 +119,6 @@ function createButtonsByGroup() {
   return buttonRows
 }
 
-function createButtonsByOrderNumber() {
-  const orderNumbers = {}
-  for (const row of getTable()) {
-    if (row[4] === '') {continue}
-    if (!(row[4] in orderNumbers)) {
-      orderNumbers[row[4]] = 0
-    }
-    orderNumbers[row[4]]++
-  }
-  const buttons = []
-  for (const num in orderNumbers) {
-    buttons.push({ "text": `${num} (${orderNumbers[num]})`, 'switch_inline_query_current_chat': '#' + num})
-  }
-  const buttonRows = []
-  let count = buttons.length;
-  if ((count % 2) === 0){
-    for (const i of [...Array(count / 2).keys()]) {
-      buttonRows.push([buttons[i], buttons[i + count / 2]])
-    }
-  } else {
-    count--
-    buttonRows.push([buttons.shift()])
-    for (const i of [...Array(count / 2).keys()]) {
-      buttonRows.push([buttons[i], buttons[i + count / 2]])
-    }
-  }
-  return buttonRows
-}
-
 function selectMat() {
   const mes = message.text.replaceAll('Выбрать ', '');
   let [matName, _, ostatok, matId] = machinize(mes)
