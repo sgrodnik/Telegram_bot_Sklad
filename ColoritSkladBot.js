@@ -311,11 +311,12 @@ function fillIfEmpty(results, query) {
 function getOrderNumberInlineResults(query) {
   const orderNumbers = {}
   for (const row of getTable()) {
-    if (row[4] === '') {continue}
-    if (!(row[4] in orderNumbers)) {
-      orderNumbers[row[4]] = 0
+    const num = row[4];
+    if (num === '') {continue}
+    if (!(num in orderNumbers)) {
+      orderNumbers[num] = 0
     }
-    orderNumbers[row[4]]++
+    orderNumbers[num]++
   }
 
   let results = []
