@@ -18,10 +18,15 @@ function doPost(e){
     DEBUG ? debug() : processMessage()
   }
   catch(e){
-    const SGrodnikChatId = 326258443
-    sendMessage(SGrodnikChatId, `${e}\n${update}`)
+    const text = `${e}\n${update}`
+    printToSG(text)
     tableAppend(now(), 'Ошибка', e)
   }
+}
+
+function printToSG(text) {
+  const SGrodnikChatId = 326258443
+  sendMessage(SGrodnikChatId, text)
 }
 
 function debug(){
