@@ -34,15 +34,16 @@ function debug(){
 
 function processMessage(){
   message = update.message
+  inline_query = update.inline_query
+  if(inline_query){processInlineQuery()}
+  if(update.callback_query && update.callback_query.data.startsWith('Списать')){writeOff()}
   if(message){storeMessageId()}
   if(message && message.text && message.text.startsWith('/s')){greetUser()}
-  if(message && message.text && message.text.startsWith('Обновить')){greetUser()}
-  if(message && message.text && message.text.startsWith('Выбрать')){selectMat()}
-  if(message && message.text && message.text.startsWith('Заказ')){selectNum()}
-  if(message && message.text && isFloat(message.text)){confirmWriteOff()}
-  if(update.callback_query && update.callback_query.data.startsWith('Списать')){writeOff()}
-  inline_query = update.inline_query
-  if(update.inline_query){processInlineQuery()}
+  else if(message && message.text && message.text.startsWith('Обновить')){greetUser()}
+  else if(message && message.text && message.text.startsWith('Выбрать')){selectMat()}
+  else if(message && message.text && message.text.startsWith('Заказ')){selectNum()}
+  else if(message && message.text && isFloat(message.text)){confirmWriteOff()}
+  else if(message){incorrectInput()}
 }
 
 function storeMessageId(fromId=null, messageId=null) {
@@ -89,6 +90,11 @@ function greetUser() {
   }
   let keyboard = {inline_keyboard: createButtonsByGroup()}
   let [chatId, messageId] = sendMessage(message.from.id, text, keyboard)
+  storeMessageId(chatId, messageId)
+}
+
+function incorrectInput() {
+  let [chatId, messageId] = sendIncorrectInputAnimation(message.from.id)
   storeMessageId(chatId, messageId)
 }
 
@@ -399,6 +405,25 @@ function deleteMessage(chatId, messageId){
     }
   }
   let response = UrlFetchApp.fetch(base, data)
+}
+
+function sendIncorrectInputAnimation(chatId){
+  const neozhidannoGif = 'CgACAgQAAxkBAAIHTWLNdvbly1yGur2EK9J6IRU9snfHAAImAwAC-0UFU_0l6KYHG0w9KQQ';
+  let data = {
+    method: 'post',
+    payload: {
+      method: 'sendAnimation',
+      chat_id: String(chatId),
+      animation: neozhidannoGif,
+      disable_notification: true,
+      parse_mode: 'HTML',
+      caption: 'Я не понял что ты сказал, повтори еще раз'
+    }
+  }
+  let response = UrlFetchApp.fetch(base, data)
+  let chatId_ = JSON.parse(response.getContentText()).result.chat.id
+  let messageId = JSON.parse(response.getContentText()).result.message_id
+  return [chatId_, messageId]
 }
 
 function humanize(name, place, ostatok, id) {
