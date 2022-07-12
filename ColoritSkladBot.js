@@ -101,7 +101,8 @@ function greetUser() {
 }
 
 function incorrectInput() {
-  let [chatId, messageId] = sendIncorrectInputAnimation(message.from.id)
+  const caption = 'Я не понял что ты сказал, повтори еще раз'
+  let [chatId, messageId] = sendIncorrectInputAnimation(message.from.id, caption)
   storeMessageId(chatId, messageId)
 }
 
@@ -154,7 +155,7 @@ function selectMat() {
   let [matName, _, ostatok, matId] = machinize(mes)
   props.setProperty(message.from.id, matName + ',id=' + matId)
   props.setProperty(matId, ostatok)
-  let text = `Введите количество ≤ ${ostatok} кг`
+  let text = `Введи количество ≤ ${ostatok} кг`
   let [chatId, messageId] = sendMessage(message.from.id, text)
   storeMessageId(chatId, messageId)
 }
@@ -186,8 +187,8 @@ function confirmWriteOff() {
   let [matName, matId] = properties.getProperty(message.from.id).split(',id=')
   const ostatok = props.getProperty(matId);
   if(parseFloat(amount.replace('.', ',')) > parseFloat(ostatok)){
-    let text = `Введите количество <b>≤ ${ostatok}</b> кг`
-    let [chatId, messageId] = sendMessage(message.from.id, text)
+    let caption = `Введи количество <b>≤ ${ostatok}</b> кг`
+    let [chatId, messageId] = sendIncorrectInputAnimation(userId, caption)
     storeMessageId(chatId, messageId)
     return
   }
@@ -437,7 +438,7 @@ function deleteMessage(chatId, messageId){
   let response = UrlFetchApp.fetch(base, data)
 }
 
-function sendIncorrectInputAnimation(chatId){
+function sendIncorrectInputAnimation(chatId, caption=''){
   const neozhidannoGif = 'CgACAgQAAxkBAAIHTWLNdvbly1yGur2EK9J6IRU9snfHAAImAwAC-0UFU_0l6KYHG0w9KQQ';
   let data = {
     method: 'post',
@@ -447,7 +448,7 @@ function sendIncorrectInputAnimation(chatId){
       animation: neozhidannoGif,
       disable_notification: true,
       parse_mode: 'HTML',
-      caption: 'Я не понял что ты сказал, повтори еще раз'
+      caption: caption
     }
   }
   let response = UrlFetchApp.fetch(base, data)
