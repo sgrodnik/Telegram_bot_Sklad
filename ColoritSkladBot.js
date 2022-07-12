@@ -6,6 +6,7 @@ const props = PropertiesService.getScriptProperties()
 
 let update
 let message
+let userId
 
 const DEBUG = 0
 
@@ -40,6 +41,7 @@ function debug(){
 function processMessage(){
   message = update.message
   inline_query = update.inline_query
+  userId = message ? message.from.id : inline_query ? inline_query.from.id : update.callback_query.from.id
   if(inline_query){processInlineQuery()}
   if(update.callback_query && update.callback_query.data.startsWith('Списать')){writeOff()}
   if(message){storeMessageId()}
@@ -252,12 +254,35 @@ function tableAppend(){
 function getTableStorage() {
   const sheet = ssApp.getSheetByName('СКЛАД')
   const range = sheet.getRange(4, 1, 500, 12)
-  return range.getValues()
+  const result = []
+  let allowedGroups = getAllowedGroups(userId)
+  for (const row of range.getValues()) {
+    const group = row[1]
+    const ostatok = Number(row[10])
+    if (allowedGroups.includes(group) && ostatok > 0) result.push(row)
+  }
+  return result
+}
+
+function getAllowedGroups(userId) {
+  const tableUser = getTableUser()
+  const allMats = tableUser[0].slice(2, -1)
+  for (const row_ of tableUser){
+    if (userId === row_[0]){
+      const allowedMats = []
+      const allMatsStatuses = row_.slice(2, -1)
+      for (const i of [...Array(allMatsStatuses.length).keys()]) {
+        if (allMatsStatuses[i] === true) allowedMats.push(allMats[i])
+      }
+      return allowedMats
+    }
+  }
+  return allMats
 }
 
 function getTableUser() {
   const sheet = ssApp.getSheetByName('ПОЛЬЗОВАТЕЛИ')
-  const range = sheet.getRange(2, 1, 50, 1)
+  const range = sheet.getRange(3, 1, 50, 32)
   return range.getValues()
 }
 
