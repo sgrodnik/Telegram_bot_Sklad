@@ -110,7 +110,7 @@ function createButtonsByGroup() {
     if (!(group in groups)) {
       groups[group] = 0
     }
-    const ostatok = Number(row[9])
+    const ostatok = Number(row[10])
     if (ostatok > 0){
       groups[group]++
     }
@@ -196,7 +196,7 @@ function writeOff() {
   let ostatok = '?'
   for (const row of getTableStorage()) {
     if(String(row[0]) === matId){
-      ostatok = row[9]
+      ostatok = row[10]
     }
   }
   props.setProperty(matId, ostatok)
@@ -240,7 +240,7 @@ function tableAppend(){
 
 function getTableStorage() {
   const sheet = ssApp.getSheetByName('СКЛАД')
-  const range = sheet.getRange(4, 1, 500, 11)
+  const range = sheet.getRange(4, 1, 500, 12)
   return range.getValues()
 }
 
@@ -279,7 +279,7 @@ function getNameInlineResults(query) {
         name.toLowerCase().includes(query.toLowerCase())
     if (condition) {
       counter++
-      const ostatok = String(Math.round(row[9] * 100) / 100).replaceAll('.', ',')
+      const ostatok = String(Math.round(row[10] * 100) / 100).replaceAll('.', ',')
       const noZak = num === '-' || num === '' ? '' : ` | #${num}`
       const messageText = 'Выбрать ' + humanize(name, place, ostatok, id)
       results.push({
@@ -287,10 +287,10 @@ function getNameInlineResults(query) {
         type: 'article',
         title: `${name} | ${supplyer}${noZak}`,
         description: `Остаток ${ostatok} кг | Расположение: ${stellaj} ${polka}`,
-        input_message_content: {
-          message_text: messageText
-        },
-        thumb_url: row[10]
+        input_message_content: {message_text: messageText},
+        thumb_url: row[11],
+        thumb_width: Number(10),
+        thumb_height: Number(10)
       })
     }
   }
