@@ -19,7 +19,7 @@ function doPost(e){
   }
   catch(e){
     const SGrodnikChatId = 326258443
-    sendMessage(SGrodnikChatId, e)
+    sendMessage(SGrodnikChatId, `${e}\n${update}`)
     tableAppend(now(), 'Ошибка', e)
   }
 }
