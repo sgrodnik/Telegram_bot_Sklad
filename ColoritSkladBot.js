@@ -85,7 +85,7 @@ function greetUser() {
   if(isUserAuthorized()) {
     text = `Привет, ${userName}! Давай найдём материал:`
   } else {
-    text = `Привет, ${userName}! Это демо-режим бота, т.к. твой id ${message.from.id} не зарегистрирован (списания не будут учтены в таблице)`
+    text = `Привет, ${userName}! Это демо-режим бота, т.к. твой id ${message.from.id} не зарегистрирован (списания не будут учтены в таблице). \nОбратись к администратору, чтобы тебя подключили к системе или давай продолжим так и просто потестим бота`
   }
   let keyboard = {inline_keyboard: createButtonsByGroup()}
   let [chatId, messageId] = sendMessage(message.from.id, text, keyboard)
