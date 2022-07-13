@@ -54,7 +54,7 @@ function processMessage(){
 }
 
 function storeMessageId(fromId=null, messageId=null) {
-  const propName = `${fromId || message.from.id}messages`
+  const propName = `${fromId || userId}messages`
   let storage = props.getProperty(propName)
   if (!storage) storage = []
   else storage = JSON.parse(storage)
@@ -68,7 +68,7 @@ function storeReportToEditNextTime(fromId, messageId, text) {
 }
 
 function deleteMessages(chatId=null, senderId=null) {
-  const propName = `${senderId || message.from.id}messages`
+  const propName = `${senderId || userId}messages`
   let storage = props.getProperty(propName)
   props.deleteProperty(propName)
   if (!storage) storage = []
@@ -93,23 +93,22 @@ function greetUser() {
   if(isUserAuthorized()) {
     text = `Привет, ${userName}! Давай найдём материал:`
   } else {
-    text = `Привет, ${userName}! Это демо-режим бота, т.к. твой id ${message.from.id} не зарегистрирован (списания не будут учтены в таблице). \nОбратись к администратору, чтобы тебя подключили к системе или давай продолжим так и просто потестим бота`
+    text = `Привет, ${userName}! Это демо-режим бота, т.к. твой id ${userId} не зарегистрирован (списания не будут учтены в таблице). \nОбратись к администратору, чтобы тебя подключили к системе или давай продолжим так и просто потестим бота`
   }
   let keyboard = {inline_keyboard: createButtonsByGroup()}
-  let [chatId, messageId] = sendMessage(message.from.id, text, keyboard)
+  let [chatId, messageId] = sendMessage(userId, text, keyboard)
   storeMessageId(chatId, messageId)
 }
 
 function incorrectInput() {
   const caption = 'Я не понял что ты сказал, повтори еще раз'
-  let [chatId, messageId] = sendIncorrectInputAnimation(message.from.id, caption)
+  let [chatId, messageId] = sendIncorrectInputAnimation(userId, caption)
   storeMessageId(chatId, messageId)
 }
 
-function isUserAuthorized(userId=null) {
-  let id = userId || message.from.id
+function isUserAuthorized() {
   for (const row_ of getTableUser()){
-    if (id === row_[0]){
+    if (userId === row_[0]){
       return true
     }
   }
@@ -153,10 +152,10 @@ function createButtonsByGroup() {
 function selectMat() {
   const mes = message.text.replaceAll('Выбрать ', '');
   let [matName, _, ostatok, matId] = machinize(mes)
-  props.setProperty(message.from.id, matName + ',id=' + matId)
+  props.setProperty(userId, matName + ',id=' + matId)
   props.setProperty(matId, ostatok)
   let text = `Введи количество ≤ ${ostatok} кг`
-  let [chatId, messageId] = sendMessage(message.from.id, text)
+  let [chatId, messageId] = sendMessage(userId, text)
   storeMessageId(chatId, messageId)
 }
 
@@ -166,7 +165,7 @@ function selectNum() {
         [[{ "text": `Показать позиции по заказу ${num}`,
           'switch_inline_query_current_chat': `#${num}` }]]
   }
-  let [chatId, messageId] = sendMessage(message.from.id, `👇`, keyboard)
+  let [chatId, messageId] = sendMessage(userId, `👇`, keyboard)
   storeMessageId(chatId, messageId)
 }
 
@@ -184,7 +183,7 @@ function isFloat(str){
 function confirmWriteOff() {
   let amount = String(parseFloat(message.text.replace(',', '.'))).replace('.', ',')
   let properties = PropertiesService.getScriptProperties()
-  let [matName, matId] = properties.getProperty(message.from.id).split(',id=')
+  let [matName, matId] = properties.getProperty(userId).split(',id=')
   const ostatok = props.getProperty(matId);
   if(parseFloat(amount.replace('.', ',')) > parseFloat(ostatok)){
     let caption = `Введи количество <b>≤ ${ostatok}</b> кг`
@@ -196,18 +195,18 @@ function confirmWriteOff() {
   let keyboard = {inline_keyboard:
         [[{ "text": `Списать ✓`, 'callback_data': `Списать ${amount}` }]]
   }
-  sendMessage(message.from.id, text, keyboard)
+  sendMessage(userId, text, keyboard)
 }
 
 function writeOff() {
   const callbackQuery = update.callback_query
   const amount = callbackQuery.data.replace('Списать ', '')
   const properties = PropertiesService.getScriptProperties()
-  const [matName, matId] = properties.getProperty(callbackQuery.from.id).split(',id=')
+  const [matName, matId] = properties.getProperty(userId).split(',id=')
   const message = callbackQuery.message
   const date = toDate(message.date)
-  tableAppend(date, callbackQuery.from.id, matId, amount)
   let ostatok = '?'
+  tableAppend(date, userId, matId, amount)
   for (const row of getTableStorage()) {
     if(String(row[0]) === matId){
       ostatok = row[10]
@@ -215,11 +214,11 @@ function writeOff() {
   }
   props.setProperty(matId, ostatok)
   ostatok = String(Math.round(ostatok * 100) / 100).replaceAll('.', ',')
-  const demo = isUserAuthorized(callbackQuery.from.id) ? '' : ' <tg-spoiler>, Демо-режим</tg-spoiler>'
+  const demo = isUserAuthorized() ? '' : ' <tg-spoiler>, Демо-режим</tg-spoiler>'
   const text = `👌 списано <b>${amount}</b> кг <b>${matName}</b>, Остаток ${ostatok} кг${demo}`
   const keyboard = {inline_keyboard: createButtonsByGroup()}
   let [chatId, messageId] = editMessage(message.chat.id, message.message_id, text, keyboard)
-  deleteMessages(message.chat.id, callbackQuery.from.id)
+  deleteMessages(message.chat.id, userId)
   editPrevReport(chatId)
   storeReportToEditNextTime(chatId, messageId, text)
 }
