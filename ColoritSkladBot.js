@@ -204,11 +204,11 @@ function writeOff() {
   const [matName, matId] = properties.getProperty(userId).split(',id=')
   const message = callbackQuery.message
   const date = toDate(message.date)
-  let ostatok = '?'
   tableAppend(date, userId, matId, amount)
+  let ostatok = 0
   for (const row of getTableStorage()) {
     if(String(row[0]) === matId){
-      ostatok = row[10]
+      ostatok = row[10] || 0
     }
   }
   props.setProperty(matId, ostatok)
