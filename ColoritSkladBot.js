@@ -46,7 +46,6 @@ function processMessage(){
   if(update.callback_query && update.callback_query.data.startsWith('Списать')){writeOff()}
   if(message){storeMessageId()}
   if(message && message.text && message.text.startsWith('/s')){greetUser()}
-  else if(message && message.text && message.text.startsWith('Обновить')){greetUser()}
   else if(message && message.text && message.text.startsWith('Выбрать')){selectMat()}
   else if(message && message.text && message.text.startsWith('Заказ')){selectNum()}
   else if(message && message.text && isFloat(message.text)){confirmWriteOff()}
