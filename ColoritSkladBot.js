@@ -251,7 +251,7 @@ function confirmWriteOff() {
   let amount = String(parseFloat(message.text.replace(',', '.'))).replace('.', ',')
   let properties = PropertiesService.getScriptProperties()
   let [matName, matId] = properties.getProperty(userId).split(',id=')
-  const ostatok = props.getProperty(matId);
+  const ostatok = props.getProperty(matId).replace(',', '.')
   if(parseFloat(amount.replace(',', '.')) > parseFloat(ostatok)){
     let caption = `Введи количество <b>≤ ${ostatok}</b> кг`
     let [chatId, messageId] = sendIncorrectInputAnimation(userId, caption)
