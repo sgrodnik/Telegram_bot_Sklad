@@ -7,6 +7,7 @@ const props = PropertiesService.getScriptProperties()
 let update
 let message
 let userId
+let inline_query
 
 const DEBUG = 0
 
@@ -44,12 +45,34 @@ function processMessage(){
   userId = message ? message.from.id : inline_query ? inline_query.from.id : update.callback_query.from.id
   if(inline_query){processInlineQuery()}
   if(update.callback_query && update.callback_query.data.startsWith('Списать')){writeOff()}
+  if(update.callback_query && update.callback_query.data.startsWith('Показать')){swithMenuToSubgroups()}
+  if(update.callback_query && update.callback_query.data.startsWith('Назад')){swithMenuToGroups()}
   if(message){storeMessageId()}
   if(message && message.text && message.text.startsWith('/s')){greetUser()}
   else if(message && message.text && message.text.startsWith('Выбрать')){selectMat()}
   else if(message && message.text && message.text.startsWith('Заказ')){selectNum()}
   else if(message && message.text && isFloat(message.text)){confirmWriteOff()}
   else if(message){incorrectInput()}
+}
+
+function swithMenuToSubgroups() {
+  const callbackQuery = update.callback_query
+  const selectedGroup = callbackQuery.data.replace('Показать ', '')
+  props.setProperty(`${userId}SelectedGroup`, selectedGroup)
+  const keyboard = {inline_keyboard: createButtonsByGroup()}
+
+  let storage = props.getProperty(`${userId}MenuMessageId`)
+  let [messageId, text] = JSON.parse(storage)
+  editMessage(userId, messageId, text, keyboard)
+}
+
+function swithMenuToGroups() {
+  props.deleteProperty(`${userId}SelectedGroup`)
+  const keyboard = {inline_keyboard: createButtonsByGroup()}
+
+  let storage = props.getProperty(`${userId}MenuMessageId`)
+  let [messageId, text] = JSON.parse(storage)
+  editMessage(userId, messageId, text, keyboard)
 }
 
 function storeMessageId(fromId=null, messageId=null) {
@@ -59,6 +82,11 @@ function storeMessageId(fromId=null, messageId=null) {
   else storage = JSON.parse(storage)
   storage.push(messageId || message.message_id)
   props.setProperty(propName, JSON.stringify(storage))
+}
+
+function storeMenuMessage(messageId, text) {
+  const propName = `${userId}MenuMessageId`
+  props.setProperty(propName, JSON.stringify([messageId, text]))
 }
 
 function storeReportToEditNextTime(fromId, messageId, text) {
@@ -97,6 +125,7 @@ function greetUser() {
   let keyboard = {inline_keyboard: createButtonsByGroup()}
   let [chatId, messageId] = sendMessage(userId, text, keyboard)
   storeMessageId(chatId, messageId)
+  storeMenuMessage(messageId, text)
 }
 
 function incorrectInput() {
@@ -115,6 +144,10 @@ function isUserAuthorized() {
 }
 
 function createButtonsByGroup() {
+  const selectedGroup = props.getProperty(`${userId}SelectedGroup`)
+  if (selectedGroup) {
+    return createButtonsBySubgroup(selectedGroup)
+  }
   const groups = {}
   for (const row of getTableStorage()) {
     const group = row[1]
@@ -122,14 +155,14 @@ function createButtonsByGroup() {
     if (!(group in groups)) {
       groups[group] = 0
     }
-    const ostatok = Number(row[10])
+    const ostatok = Number(row[11])
     if (ostatok > 0){
       groups[group]++
     }
   }
   const buttons = [{ "text": "🔍 Общий поиск", 'switch_inline_query_current_chat': '' }]
   for (const groupName in groups) {
-    buttons.push({ "text": `${groupName} (${groups[groupName]})`, 'switch_inline_query_current_chat': groupName})
+    buttons.push({ "text": `${groupName} (${groups[groupName]})`, 'callback_data': `Показать ${groupName}`})
   }
   const buttonRows = []
   let count = buttons.length;
@@ -147,6 +180,41 @@ function createButtonsByGroup() {
   buttonRows.push([{ "text": "🔍 Поиск По номеру заказа", 'switch_inline_query_current_chat': '#' }])
   return buttonRows
 }
+
+ function createButtonsBySubgroup() {
+   const subgroups = {}
+   const selectedGroup = props.getProperty(`${userId}SelectedGroup`)
+   for (const row of getTableStorage()) {
+     const group = row[1]
+     const subgroup = row[2]
+     if (group !== selectedGroup) {continue}
+     if (!(subgroup in subgroups)) {
+       subgroups[subgroup] = 0
+     }
+     const ostatok = Number(row[11])
+     if (ostatok > 0){
+       subgroups[subgroup]++
+     }
+   }
+   const buttons = [{ "text": "Назад", 'callback_data': `Назад` }]
+   for (const subgroupName in subgroups) {
+     buttons.push({ "text": `${subgroupName} (${subgroups[subgroupName]})`, 'switch_inline_query_current_chat': subgroupName})
+   }
+   const buttonRows = []
+   let count = buttons.length;
+   if ((count % 2) === 0){
+     for (const i of [...Array(count / 2).keys()]) {
+       buttonRows.push([buttons[i], buttons[i + count / 2]])
+     }
+   } else {
+     count--
+     buttonRows.push([buttons.shift()])
+     for (const i of [...Array(count / 2).keys()]) {
+       buttonRows.push([buttons[i], buttons[i + count / 2]])
+     }
+   }
+   return buttonRows
+ }
 
 function selectMat() {
   const mes = message.text.replaceAll('Выбрать ', '');
@@ -184,7 +252,7 @@ function confirmWriteOff() {
   let properties = PropertiesService.getScriptProperties()
   let [matName, matId] = properties.getProperty(userId).split(',id=')
   const ostatok = props.getProperty(matId);
-  if(parseFloat(amount.replace('.', ',')) > parseFloat(ostatok)){
+  if(parseFloat(amount.replace(',', '.')) > parseFloat(ostatok)){
     let caption = `Введи количество <b>≤ ${ostatok}</b> кг`
     let [chatId, messageId] = sendIncorrectInputAnimation(userId, caption)
     storeMessageId(chatId, messageId)
@@ -208,7 +276,7 @@ function writeOff() {
   let ostatok = 0
   for (const row of getTableStorage()) {
     if(String(row[0]) === matId){
-      ostatok = row[10] || 0
+      ostatok = row[11] || 0
     }
   }
   props.setProperty(matId, ostatok)
@@ -220,6 +288,7 @@ function writeOff() {
   deleteMessages(message.chat.id, userId)
   editPrevReport(chatId)
   storeReportToEditNextTime(chatId, messageId, text)
+  storeMenuMessage(messageId, text)
 }
 
 function toDate(unixTimestamp){
@@ -252,13 +321,13 @@ function tableAppend(){
 
 function getTableStorage() {
   const sheet = ssApp.getSheetByName('СКЛАД')
-  const range = sheet.getRange(4, 1, 500, 12)
+  const range = sheet.getRange(4, 1, 500, 13)
   const result = []
   let allowedGroups = getAllowedGroups(userId)
   for (const row of range.getValues()) {
-    const group = row[1]
-    const ostatok = Number(row[10])
-    if (allowedGroups.includes(group) && ostatok > 0) result.push(row)
+    const subgroup = row[2]
+    const ostatok = Number(row[11])
+    if (allowedGroups.includes(subgroup) && ostatok > 0) result.push(row)
   }
   return result
 }
@@ -303,18 +372,18 @@ function getNameInlineResults(query) {
   let counter = 0
   for (const row of getTableStorage()) {
     const id = row[0]
-    const name = clear(row[2])
-    const supplyer = row[3]
-    const num = row[4]
-    const stellaj = row[5]
-    const polka = row[6]
+    const name = clear(row[3])
+    const supplyer = row[4]
+    const num = row[5]
+    const stellaj = row[6]
+    const polka = row[7]
     const place = stellaj + polka
     const condition = query.startsWith('#') ?
         '#' + num === query :
         name.toLowerCase().includes(query.toLowerCase())
     if (condition) {
       counter++
-      const ostatok = String(Math.round(row[10] * 100) / 100).replaceAll('.', ',')
+      const ostatok = String(Math.round(row[11] * 100) / 100).replaceAll('.', ',')
       const noZak = num === '-' || num === '' ? '' : ` | #${num}`
       const messageText = 'Выбрать ' + humanize(name, place, ostatok, id)
       results.push({
@@ -323,7 +392,7 @@ function getNameInlineResults(query) {
         title: `${name} | ${supplyer}${noZak}`,
         description: `Остаток ${ostatok} кг | Расположение: ${stellaj} ${polka}`,
         input_message_content: {message_text: messageText},
-        thumb_url: row[11],
+        thumb_url: row[12],
         thumb_width: Number(10),
         thumb_height: Number(10)
       })
@@ -350,7 +419,7 @@ function fillIfEmpty(results, query) {
 function getOrderNumberInlineResults(query) {
   const orderNumbers = {}
   for (const row of getTableStorage()) {
-    const num = row[4];
+    const num = row[5];
     if (num === '') {continue}
     if (!(num in orderNumbers)) {
       orderNumbers[num] = 0
