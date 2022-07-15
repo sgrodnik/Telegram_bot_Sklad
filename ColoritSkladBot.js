@@ -155,8 +155,8 @@ function createButtonsByGroup() {
     if (!(group in groups)) {
       groups[group] = 0
     }
-    const ostatok = Number(row[11])
-    if (ostatok > 0){
+    const residue = Number(row[11])
+    if (residue > 0){
       groups[group]++
     }
   }
@@ -191,8 +191,8 @@ function createButtonsByGroup() {
      if (!(subgroup in subgroups)) {
        subgroups[subgroup] = 0
      }
-     const ostatok = Number(row[11])
-     if (ostatok > 0){
+     const residue = Number(row[11])
+     if (residue > 0){
        subgroups[subgroup]++
      }
    }
@@ -218,10 +218,10 @@ function createButtonsByGroup() {
 
 function selectMat() {
   const mes = message.text.replaceAll('Выбрать ', '');
-  let [matName, _, ostatok, matId] = machinize(mes)
+  let [matName, _, residue, matId] = machinize(mes)
   props.setProperty(userId, matName + ',id=' + matId)
-  props.setProperty(matId, ostatok)
-  let text = `Введи количество ≤ ${ostatok} кг`
+  props.setProperty(matId, residue)
+  let text = `Введи количество ≤ ${residue} кг`
   let [chatId, messageId] = sendMessage(userId, text)
   storeMessageId(chatId, messageId)
 }
@@ -251,9 +251,9 @@ function confirmWriteOff() {
   let amount = String(parseFloat(message.text.replace(',', '.'))).replace('.', ',')
   let properties = PropertiesService.getScriptProperties()
   let [matName, matId] = properties.getProperty(userId).split(',id=')
-  const ostatok = props.getProperty(matId).replace(',', '.')
-  if(parseFloat(amount.replace(',', '.')) > parseFloat(ostatok)){
-    let caption = `Введи количество <b>≤ ${ostatok}</b> кг`
+  const residue = props.getProperty(matId).replace(',', '.')
+  if(parseFloat(amount.replace(',', '.')) > parseFloat(residue)){
+    let caption = `Введи количество <b>≤ ${residue}</b> кг`
     let [chatId, messageId] = sendIncorrectInputAnimation(userId, caption)
     storeMessageId(chatId, messageId)
     return
@@ -273,16 +273,16 @@ function writeOff() {
   const message = callbackQuery.message
   const date = toDate(message.date)
   tableAppend(date, userId, matId, amount)
-  let ostatok = 0
+  let residue = 0
   for (const row of getTableStorage()) {
     if(String(row[0]) === matId){
-      ostatok = row[11] || 0
+      residue = row[11] || 0
     }
   }
-  props.setProperty(matId, ostatok)
-  ostatok = String(Math.round(ostatok * 100) / 100).replaceAll('.', ',')
+  props.setProperty(matId, residue)
+  residue = String(Math.round(residue * 100) / 100).replaceAll('.', ',')
   const demo = isUserAuthorized() ? '' : ' <tg-spoiler>, Демо-режим</tg-spoiler>'
-  const text = `👌 списано <b>${amount}</b> кг <b>${matName}</b>, Остаток ${ostatok} кг${demo}`
+  const text = `👌 списано <b>${amount}</b> кг <b>${matName}</b>, Остаток ${residue} кг${demo}`
   const keyboard = {inline_keyboard: createButtonsByGroup()}
   let [chatId, messageId] = editMessage(message.chat.id, message.message_id, text, keyboard)
   deleteMessages(message.chat.id, userId)
@@ -326,8 +326,8 @@ function getTableStorage() {
   let allowedGroups = getAllowedGroups(userId)
   for (const row of range.getValues()) {
     const subgroup = row[2]
-    const ostatok = Number(row[11])
-    if (allowedGroups.includes(subgroup) && ostatok > 0) result.push(row)
+    const residue = Number(row[11])
+    if (allowedGroups.includes(subgroup) && residue > 0) result.push(row)
   }
   return result
 }
@@ -383,14 +383,14 @@ function getNameInlineResults(query) {
         name.toLowerCase().includes(query.toLowerCase())
     if (condition) {
       counter++
-      const ostatok = String(Math.round(row[11] * 100) / 100).replaceAll('.', ',')
+      const residue = String(Math.round(row[11] * 100) / 100).replaceAll('.', ',')
       const noZak = num === '-' || num === '' ? '' : ` | #${num}`
-      const messageText = 'Выбрать ' + humanize(name, place, ostatok, id)
+      const messageText = 'Выбрать ' + humanize(name, place, residue, id)
       results.push({
         id: counter.toString(),
         type: 'article',
         title: `${name} | ${supplyer}${noZak}`,
-        description: `Остаток ${ostatok} кг | Расположение: ${stellaj} ${polka}`,
+        description: `Остаток ${residue} кг | Расположение: ${stellaj} ${polka}`,
         input_message_content: {message_text: messageText},
         thumb_url: row[12],
         thumb_width: Number(10),
@@ -524,8 +524,8 @@ function sendIncorrectInputAnimation(chatId, caption=''){
   return [chatId_, messageId]
 }
 
-function humanize(name, place, ostatok, id) {
-  let s = JSON.stringify([name, 'Место ' + place, ostatok + ' кг', 'id' + id])
+function humanize(name, place, residue, id) {
+  let s = JSON.stringify([name, 'Место ' + place, residue + ' кг', 'id' + id])
   s = s.replace('["', ': ')
   s = s.replace('"]', '')
   s = s.replaceAll('","', ' | ')
