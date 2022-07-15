@@ -543,3 +543,5 @@ function machinize(s) {
 }
 
 function pass(){console.log(123)}
+
+function ClearCache(){props.deleteAllProperties()}
