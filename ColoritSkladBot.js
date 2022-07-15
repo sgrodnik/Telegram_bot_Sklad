@@ -19,9 +19,9 @@ function doPost(e){
     DEBUG ? debug() : processMessage()
   }
   catch(e){
-    const text = `Ошибка\n${e}\n${update}`
+    const text = `${e}\n${JSON.stringify(update)}`
     printToSG(text)
-    tableAppend(now(), 'Ошибка!', text)
+    tableAppend(now(), 'Ошибка', text)
   }
 }
 
