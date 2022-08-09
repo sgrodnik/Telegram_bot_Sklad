@@ -45,33 +45,35 @@ function processMessage(){
   userId = message ? message.from.id : inline_query ? inline_query.from.id : update.callback_query.from.id
   if(inline_query){processInlineQuery()}
   if(update.callback_query && update.callback_query.data.startsWith('Списать')){writeOff()}
-  if(update.callback_query && update.callback_query.data.startsWith('Показать')){swithMenuToSubgroups()}
-  if(update.callback_query && update.callback_query.data.startsWith('Назад')){swithMenuToGroups()}
+  if(update.callback_query && update.callback_query.data.startsWith('Меню')){switchMenu()}
+  if(update.callback_query && update.callback_query.data.startsWith('ТройноеМеню')){updateTrioMenu()}
+  if(update.callback_query && update.callback_query.data.startsWith('Добавить')){makeAddition()}
   if(message){storeMessageId()}
   if(message && message.text && message.text.startsWith('/s')){greetUser()}
   else if(message && message.text && message.text.startsWith('Выбрать')){selectMat()}
   else if(message && message.text && message.text.startsWith('Заказ')){selectNum()}
-  else if(message && message.text && isFloat(message.text)){confirmWriteOff()}
+  else if(message && message.text && isFloat(message.text)){confirmAmount()}
   else if(message){incorrectInput()}
 }
 
-function swithMenuToSubgroups() {
-  const callbackQuery = update.callback_query
-  const selectedGroup = callbackQuery.data.replace('Показать ', '')
-  props.setProperty(`${userId}SelectedGroup`, selectedGroup)
-  const keyboard = {inline_keyboard: createButtonsByGroup()}
-
+function switchMenu() {
+  const action = update.callback_query.data.replace('Меню ', '')
+  switch (action.split(' ')[0]) {
+    case 'Списание':
+      props.setProperty(`${userId}MenuSection`, 'WriteOffMenu'); break
+    case 'Добавление':
+      props.setProperty(`${userId}MenuSection`, 'AddMenu'); break
+    case 'Показать':
+      const selectedGroup = action.replace('Показать ', '')
+      props.setProperty(`${userId}SelectedGroup`, selectedGroup); break
+    case 'Назад':
+      props.deleteProperty(`${userId}SelectedGroup`); break
+    case 'НазадГлавное':
+      props.deleteProperty(`${userId}MenuSection`); break
+  }
   let storage = props.getProperty(`${userId}MenuMessageId`)
   let [messageId, text] = JSON.parse(storage)
-  editMessage(userId, messageId, text, keyboard)
-}
-
-function swithMenuToGroups() {
-  props.deleteProperty(`${userId}SelectedGroup`)
-  const keyboard = {inline_keyboard: createButtonsByGroup()}
-
-  let storage = props.getProperty(`${userId}MenuMessageId`)
-  let [messageId, text] = JSON.parse(storage)
+  const keyboard = {inline_keyboard: createButtons()}
   editMessage(userId, messageId, text, keyboard)
 }
 
@@ -115,14 +117,14 @@ function editPrevReport(chatId) {
 }
 
 function greetUser() {
-  let text
-  const userName = message.from.first_name || message.from.username;
+  const userNameSource = message || update.callback_query
+  const userName = userNameSource.from.first_name || userNameSource.from.username;
   if(isUserAuthorized()) {
     text = `Привет, ${userName}! Давай найдём материал:`
   } else {
-    text = `Привет, ${userName}! Это демо-режим бота, т.к. твой id ${userId} не зарегистрирован (списания не будут учтены в таблице). \nОбратись к администратору, чтобы тебя подключили к системе или давай продолжим так и просто потестим бота`
+    text = `Привет, ${userName}! Это демо-режим бота, т.к. твой id ${userId} не зарегистрирован – действия не будут учтены в таблице. \nОбратись к администратору, чтобы тебя подключили к системе или давай продолжим так и просто потестим бота`
   }
-  let keyboard = {inline_keyboard: createButtonsByGroup()}
+  let keyboard = {inline_keyboard: createButtons()}
   let [chatId, messageId] = sendMessage(userId, text, keyboard)
   storeMessageId(chatId, messageId)
   storeMenuMessage(messageId, text)
@@ -143,11 +145,35 @@ function isUserAuthorized() {
   return false
 }
 
-function createButtonsByGroup() {
-  const selectedGroup = props.getProperty(`${userId}SelectedGroup`)
-  if (selectedGroup) {
-    return createButtonsBySubgroup(selectedGroup)
+function createButtons() {
+  const menuSection = props.getProperty(`${userId}MenuSection`)
+  switch (menuSection){
+    case 'WriteOffMenu':
+      return createButtonsWriteOffMenu()
+    case 'AddMenu':
+      return createButtonsAddMenu()
   }
+  return createButtonsMainMenu()
+}
+
+function createButtonsMainMenu() {
+  const buttons = [
+    [{"text": `➖Списание`, 'callback_data': `Меню Списание`}],
+    [{"text": `➕Добавление`, 'callback_data': `Меню Добавление`}],
+  ]
+  return buttons
+}
+
+function createButtonsWriteOffMenu() {
+  const selectedGroup = props.getProperty(`${userId}SelectedGroup`)
+  if (!selectedGroup) {
+    return createButtonsWriteOffMenuLevelOne()
+  } else {
+    return createButtonsWriteOffMenuLevelTwo(selectedGroup)
+  }
+}
+
+function createButtonsWriteOffMenuLevelOne() {
   const groups = {}
   for (const row of getTableStorage()) {
     const group = row[1]
@@ -160,9 +186,10 @@ function createButtonsByGroup() {
       groups[group]++
     }
   }
-  const buttons = [{ "text": "🔍 Общий поиск", 'switch_inline_query_current_chat': '' }]
+  const buttons = [{ "text": "Назад", 'callback_data': `Меню НазадГлавное` },
+                   { "text": "➖ Общий поиск", 'switch_inline_query_current_chat': '' }]
   for (const groupName in groups) {
-    buttons.push({ "text": `${groupName} (${groups[groupName]})`, 'callback_data': `Показать ${groupName}`})
+    buttons.push({ "text": `${groupName} (${groups[groupName]})`, 'callback_data': `Меню Показать ${groupName}`})
   }
   const buttonRows = []
   let count = buttons.length;
@@ -177,11 +204,11 @@ function createButtonsByGroup() {
       buttonRows.push([buttons[i], buttons[i + count / 2]])
     }
   }
-  buttonRows.push([{ "text": "🔍 Поиск По номеру заказа", 'switch_inline_query_current_chat': '#' }])
+  buttonRows.push([{ "text": "# Поиск По номеру заказа", 'switch_inline_query_current_chat': '#' }])
   return buttonRows
 }
 
- function createButtonsBySubgroup() {
+ function createButtonsWriteOffMenuLevelTwo() {
    const subgroups = {}
    const selectedGroup = props.getProperty(`${userId}SelectedGroup`)
    for (const row of getTableStorage()) {
@@ -196,7 +223,7 @@ function createButtonsByGroup() {
        subgroups[subgroup]++
      }
    }
-   const buttons = [{ "text": "Назад", 'callback_data': `Назад` }]
+   const buttons = [{ "text": "Назад", 'callback_data': `Меню Назад` }]
    for (const subgroupName in subgroups) {
      buttons.push({ "text": `${subgroupName} (${subgroups[subgroupName]})`, 'switch_inline_query_current_chat': subgroupName})
    }
@@ -216,14 +243,198 @@ function createButtonsByGroup() {
    return buttonRows
  }
 
+function createButtonsAddMenu() {
+  const groups = {}
+  for (const row of getTableNewPaint()) {
+    const group = row[0]
+    if (group === '') {continue}
+    if (!(group in groups)) {
+      groups[group] = 0
+    }
+    groups[group]++
+  }
+  const buttons = [{ "text": "Назад", 'callback_data': `Меню НазадГлавное` },
+                   { "text": "➕Общий поиск", 'switch_inline_query_current_chat': '+' }]
+  for (const groupName in groups) {
+    buttons.push({ "text": `${groupName} (${groups[groupName]})`,
+                   'switch_inline_query_current_chat': `+${groupName} `})
+  }
+  const buttonRows = []
+  let count = buttons.length;
+  if ((count % 2) === 0) {
+    for (const i of [...Array(count).keys()]) {
+      if ((i % 2) === 0) buttonRows.push([buttons[i], buttons[i + 1]])
+    }
+  } else {
+    count--
+    buttonRows.push([buttons.shift()])
+    for (const i of [...Array(count).keys()]) {
+      if ((i % 2) === 0) buttonRows.push([buttons[i], buttons[i + 1]])
+    }
+  }
+  return buttonRows
+}
+
+
 function selectMat() {
-  const mes = message.text.replaceAll('Выбрать ', '');
+  let section = props.getProperty(`${userId}MenuSection`)
+  if (section === 'WriteOffMenu') {
+    selectMatWriteOff()
+  } else if (section === 'AddMenu') {
+    selectMatAddition()
+  }
+  deleteLastMessage()
+}
+
+function selectMatWriteOff() {
+  const mes = message.text.replaceAll('Выбрать ', '')
   let [matName, _, residue, matId] = machinize(mes)
   props.setProperty(userId, matName + ',id=' + matId)
   props.setProperty(matId, residue)
   let text = `Введи количество ≤ ${residue} кг`
   let [chatId, messageId] = sendMessage(userId, text)
   storeMessageId(chatId, messageId)
+}
+
+function selectMatAddition() {
+  const matName = message.text.replaceAll('Выбрать ', '');
+  const user = getCachedUser()
+  user.AddMatName = matName
+  saveCachedUser(user)
+
+  let text = `Введи количество ${clear(user.AddMatName)} в кг`
+  let storage = props.getProperty(`${userId}MenuMessageId`)
+  let [messageId, _] = JSON.parse(storage)
+  // const keyboard = {inline_keyboard: createButtonsTrioMenu()}
+  editMessage(userId, messageId, text)
+  storeMenuMessage(messageId, text)
+  // let text = `Введи количество в кг`
+  // let [chatId, messageId] = sendMessage(userId, text)
+  // storeMessageId(chatId, messageId)
+}
+
+function confirmAddition() {
+  const amount = String(parseFloat(message.text.replace(',', '.'))).replace('.', ',')
+  const user = getCachedUser()
+  user.Amount = amount
+  saveCachedUser(user)
+  let text = `Для добавления <b>${amount}</b> кг <b>${clear(user.AddMatName)}</b> выбери поставщика, стеллаж и полку или введи другое количество.`
+  let storage = props.getProperty(`${userId}MenuMessageId`)
+  let [messageId, _] = JSON.parse(storage)
+  const keyboard = {inline_keyboard: createButtonsTrioMenu()}
+  editMessage(userId, messageId, text, keyboard)
+  storeMenuMessage(messageId, text)
+  deleteLastMessage()
+}
+
+function getCachedUser() {
+  const obj = JSON.parse(props.getProperty(`User ${userId}`)) || Object()
+  obj.Id = userId
+  return obj
+}
+
+function saveCachedUser(user) {
+  props.setProperty(`User ${userId}`, JSON.stringify(user))
+}
+
+function createButtonsTrioMenu() {
+  const rows = [
+    ['С1',  'П1', 'РГ ГРУПП'],
+    ['С2',  'П2', 'Бонвио'],
+    ['С3',  'П3', 'Sirca'],
+    ['С4',  'П4', 'Лак Премьер'],
+    ['С5',  '=> П5 <=', 'техноколор '],
+    ['С6',  'П6', 'Sayerlack'],
+    [' ','П7', ' '],
+    [' ','П8', ' '],
+  ]
+  const user = getCachedUser()
+  const buttonRows = []
+  for (const row of rows) {
+    const [rackName, shelfName, supplierName] = row
+    const isSelectedSupplierMark = user.SelectedSupplier === supplierName ? '✔' : ''
+    const isSelectedRackMark = user.SelectedRack === rackName ? '✔' : ''
+    const isSelectedShelfMark = user.SelectedShelf === shelfName ? '✔' : ''
+    buttonRows.push([
+        { "text": `${supplierName}${isSelectedSupplierMark}`, 'callback_data': `ТройноеМеню Поставщик ${supplierName}`},
+        { "text": `${rackName}${isSelectedRackMark}`, 'callback_data': `ТройноеМеню Стеллаж ${rackName}`},
+        { "text": `${shelfName}${isSelectedShelfMark}`, 'callback_data': `ТройноеМеню Полка ${shelfName}`},
+      ])
+  }
+  if (user.SelectedSupplier && user.SelectedRack && user.SelectedShelf) {
+    buttonRows.push([
+        {"text": `Добавить ✓`, 'callback_data': `Добавить Да`},
+      ])
+  }
+  return buttonRows
+}
+
+function updateTrioMenu() {
+  const action = update.callback_query.data.replace('ТройноеМеню ', '')
+  const user = getCachedUser()
+  const field = action.split(' ')[0]
+  let value = action.replace(`${field} `, '').replaceAll(' ', '')
+  let isChanged = false
+  switch (field) {
+    case 'Поставщик':
+      isChanged = user.SelectedSupplier !== value
+      user.SelectedSupplier = value; break
+    case 'Стеллаж':
+      isChanged = user.SelectedRack !== value
+      user.SelectedRack = value; break
+    case 'Полка':
+      isChanged = user.SelectedShelf !== value
+      user.SelectedShelf = value; break
+  }
+  saveCachedUser(user)
+  let storage = props.getProperty(`${userId}MenuMessageId`)
+  let [messageId, text] = JSON.parse(storage)
+  const keyboard = {inline_keyboard: createButtonsTrioMenu()}
+  if (isChanged) editMessage(userId, messageId, text, keyboard)
+  storeMenuMessage(messageId, text)
+}
+
+function makeAddition() {
+  const callbackQuery = update.callback_query
+  const message = callbackQuery.message
+  const date = toDate(message.date)
+  const user = getCachedUser()
+  tableNewPaintAppend(user.AddMatName, user.SelectedSupplier, '', user.SelectedRack,
+                      user.SelectedShelf, user.Amount, date, user.Id)
+  const text = `👌 Добавлено ${user.Amount} кг ${clear(user.AddMatName)} от ${user.SelectedSupplier}, место ${user.SelectedRack}-${user.SelectedShelf}`
+  editMenuMessage(text)
+  clearCachedUserAdditionSection()
+  greetUser()
+  // const demo = isUserAuthorized() ? '' : ' <tg-spoiler>, Демо-режим</tg-spoiler>'
+  // const text = `👌 списано <b>${amount}</b> кг <b>${matName}</b>, Остаток ${residue} кг${demo}`
+  // const keyboard = {inline_keyboard: createButtonsWriteOffMenu()}
+  // let [chatId, messageId] = editMessage(message.chat.id, message.message_id, text, keyboard)
+  // deleteMessages(message.chat.id, userId)
+  // editPrevReport(chatId)
+  // storeReportToEditNextTime(chatId, messageId, text)
+  // storeMenuMessage(messageId, text)
+}
+
+function tableNewPaintAppend(){
+  const sheet = ssApp.getSheetByName('ДОБАВЛЕНИЕ_ИСХОДНИК')
+  sheet.appendRow([].slice.call(arguments))
+}
+
+function editMenuMessage(textNew=null, keyboard=null) {
+  const storage = props.getProperty(`${userId}MenuMessageId`)
+  const [messageId, textOld] = JSON.parse(storage)
+  editMessage(userId, messageId, textNew || textOld, keyboard)
+  storeMenuMessage(messageId, textNew)
+}
+
+function clearCachedUserAdditionSection() {
+  const user = getCachedUser()
+  user.AddMatName = null
+  user.Amount = null
+  user.SelectedSupplier = null
+  user.SelectedRack = null
+  user.SelectedShelf = null
+  saveCachedUser(user)
 }
 
 function selectNum() {
@@ -247,6 +458,15 @@ function isFloat(str){
   return !isNaN(str)
 }
 
+function confirmAmount() {
+  let section = props.getProperty(`${userId}MenuSection`)
+  if (section === 'WriteOffMenu') {
+    confirmWriteOff()
+  } else if (section === 'AddMenu') {
+    confirmAddition()
+  }
+}
+
 function confirmWriteOff() {
   let amount = String(parseFloat(message.text.replace(',', '.'))).replace('.', ',')
   let properties = PropertiesService.getScriptProperties()
@@ -258,7 +478,7 @@ function confirmWriteOff() {
     storeMessageId(chatId, messageId)
     return
   }
-  let text = `Подтвердите списание <b>${amount}</b> кг <b>${matName}</b> или введите другое количество`
+  let text = `Подтверди списание <b>${amount}</b> кг <b>${matName}</b> или введи другое количество`
   let keyboard = {inline_keyboard:
         [[{ "text": `Списать ✓`, 'callback_data': `Списать ${amount}` }]]
   }
@@ -283,7 +503,7 @@ function writeOff() {
   residue = String(Math.round(residue * 100) / 100).replaceAll('.', ',')
   const demo = isUserAuthorized() ? '' : ' <tg-spoiler>, Демо-режим</tg-spoiler>'
   const text = `👌 списано <b>${amount}</b> кг <b>${matName}</b>, Остаток ${residue} кг${demo}`
-  const keyboard = {inline_keyboard: createButtonsByGroup()}
+  const keyboard = {inline_keyboard: createButtonsWriteOffMenu()}
   let [chatId, messageId] = editMessage(message.chat.id, message.message_id, text, keyboard)
   deleteMessages(message.chat.id, userId)
   editPrevReport(chatId)
@@ -354,6 +574,13 @@ function getTableUser() {
   return range.getValues()
 }
 
+function getTableNewPaint() {
+  const sheet = ssApp.getSheetByName('КРАСКА')
+  const range = sheet.getRange(43, 1, 5000, 6)
+  const result = range.getValues()
+  return result
+}
+
 function processInlineQuery(){
   const query = update.inline_query.query
   if (!query || query.length < 1){
@@ -362,6 +589,10 @@ function processInlineQuery(){
   }
   if (query === '#'){
     answerInlineQuery(update.inline_query.id, getOrderNumberInlineResults(query).slice(0, 50))
+    return
+  }
+  if (query.startsWith('+') && query.length > 1){
+    answerInlineQuery(update.inline_query.id, getNewPaintNameInlineResults(query).slice(0, 50))
     return
   }
   answerInlineQuery(update.inline_query.id, getNameInlineResults(query).slice(0, 50))
@@ -402,12 +633,36 @@ function getNameInlineResults(query) {
   return results;
 }
 
+function getNewPaintNameInlineResults(query) {
+  let results = []
+  let counter = 0
+  for (const row of getTableNewPaint()) {
+    const name = row[4]
+    const clearedName = clear(name)
+    if (clearedName.toLowerCase().includes(query.toLowerCase().replace('+', ''))) {
+      counter++
+      const messageText = 'Выбрать ' + name
+      results.push({
+        id: counter.toString(),
+        type: 'article',
+        title: `${name}`,
+        input_message_content: {message_text: messageText},
+        thumb_url: row[5],
+        thumb_width: 5,
+        thumb_height: 5
+      })
+    }
+  }
+  results = fillIfEmpty(results, query)
+  return results;
+}
+
 function fillIfEmpty(results, query) {
   if (results.length === 0) {
     results.push({
       id: 1,
       type: 'article',
-      title: `По запросу "${query}" ничего не найдено 👀 🤔`,
+      title: `🤔По запросу "${query}" ничего не найдено 👀`,
       input_message_content: {
         message_text: `-`
       }
@@ -485,12 +740,17 @@ function editMessage(chatId, messageId, text, keyboard=null){
       text: text,
       parse_mode: 'HTML',
       reply_markup: keyboard ? JSON.stringify(keyboard) : ''
-    }
+    },
+    muteHttpExceptions: true
   }
   let response = UrlFetchApp.fetch(base, data)
   let chatId_ = JSON.parse(response.getContentText()).result.chat.id
   let messageId_ = JSON.parse(response.getContentText()).result.message_id
   return [chatId_, messageId_]
+}
+
+function deleteLastMessage(){
+  deleteMessage(message.chat.id, message.message_id)
 }
 
 function deleteMessage(chatId, messageId){
@@ -500,7 +760,8 @@ function deleteMessage(chatId, messageId){
       method: 'deleteMessage',
       chat_id: String(chatId),
       message_id: Number(messageId)
-    }
+    },
+    muteHttpExceptions: true
   }
   let response = UrlFetchApp.fetch(base, data)
 }
