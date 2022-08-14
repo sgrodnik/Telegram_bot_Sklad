@@ -48,7 +48,6 @@ function processMessage(){
   if(update.callback_query && update.callback_query.data.startsWith('Меню')){switchMenu()}
   if(update.callback_query && update.callback_query.data.startsWith('ТройноеМеню')){updateTrioMenu()}
   if(update.callback_query && update.callback_query.data.startsWith('Добавить')){makeAddition()}
-  if(message){storeMessageId()}
   if(message && message.text && message.text.startsWith('/s')){greetUser()}
   else if(message && message.text && message.text.startsWith('Выбрать')){selectMat()}
   else if(message && message.text && message.text.startsWith('Заказ')){selectNum()}
@@ -305,12 +304,8 @@ function selectMatAddition() {
   let text = `Введи количество ${clear(user.AddMatName)} в кг`
   let storage = props.getProperty(`${userId}MenuMessageId`)
   let [messageId, _] = JSON.parse(storage)
-  // const keyboard = {inline_keyboard: createButtonsTrioMenu()}
   editMessage(userId, messageId, text)
   storeMenuMessage(messageId, text)
-  // let text = `Введи количество в кг`
-  // let [chatId, messageId] = sendMessage(userId, text)
-  // storeMessageId(chatId, messageId)
 }
 
 function confirmAddition() {
@@ -324,7 +319,6 @@ function confirmAddition() {
   const keyboard = {inline_keyboard: createButtonsTrioMenu()}
   editMessage(userId, messageId, text, keyboard)
   storeMenuMessage(messageId, text)
-  deleteLastMessage()
 }
 
 function getCachedUser() {
@@ -343,13 +337,14 @@ function createButtonsTrioMenu() {
     ['С2',  'П2', 'Бонвио'],
     ['С3',  'П3', 'Sirca'],
     ['С4',  'П4', 'Лак Премьер'],
-    ['С5',  '=> П5 <=', 'техноколор '],
+    ['С5',  'П5', 'техноколор '],
     ['С6',  'П6', 'Sayerlack'],
     [' ','П7', ' '],
     [' ','П8', ' '],
   ]
   const user = getCachedUser()
-  const buttonRows = []
+  const text = user.Order ? `Выбран заказ ${user.Order}` : 'Задать номер заказа'
+  const buttonRows = [[{"text": text, 'switch_inline_query_current_chat': '#'}]]
   for (const row of rows) {
     const [rackName, shelfName, supplierName] = row
     const isSelectedSupplierMark = user.SelectedSupplier === supplierName ? '✔' : ''
@@ -361,16 +356,25 @@ function createButtonsTrioMenu() {
         { "text": `${shelfName}${isSelectedShelfMark}`, 'callback_data': `ТройноеМеню Полка ${shelfName}`},
       ])
   }
+  // if (user.SelectedSupplier && user.SelectedRack && user.SelectedShelf && user.Order) {
   if (user.SelectedSupplier && user.SelectedRack && user.SelectedShelf) {
     buttonRows.push([
+        {"text": `Назад`, 'callback_data': `Меню Добавление`},
         {"text": `Добавить ✓`, 'callback_data': `Добавить Да`},
+      ])
+  }
+  else {
+    buttonRows.push([
+        {"text": `Назад`, 'callback_data': `Меню Добавление`},
+        {"text": ` `, 'callback_data': `-`},
       ])
   }
   return buttonRows
 }
 
 function updateTrioMenu() {
-  const action = update.callback_query.data.replace('ТройноеМеню ', '')
+  const action = message ? message.text.replace('ТройноеМеню ', '')
+                         : update.callback_query.data.replace('ТройноеМеню ', '')
   const user = getCachedUser()
   const field = action.split(' ')[0]
   let value = action.replace(`${field} `, '').replaceAll(' ', '')
@@ -385,6 +389,9 @@ function updateTrioMenu() {
     case 'Полка':
       isChanged = user.SelectedShelf !== value
       user.SelectedShelf = value; break
+    case 'Заказ':
+      isChanged = user.Order !== value
+      user.Order = value; break
   }
   saveCachedUser(user)
   let storage = props.getProperty(`${userId}MenuMessageId`)
@@ -399,25 +406,36 @@ function makeAddition() {
   const message = callbackQuery.message
   const date = toDate(message.date)
   const user = getCachedUser()
-  tableNewPaintAppend(user.AddMatName, user.SelectedSupplier, '', user.SelectedRack,
-                      user.SelectedShelf, user.Amount, date, user.Id)
+  tableNewPaintAppend(user.AddMatName, user.SelectedSupplier, user.Order, user.SelectedRack,
+                      user.SelectedShelf, user.Amount, date, getEmployeeName(user.Id))
   const text = `👌 Добавлено ${user.Amount} кг ${clear(user.AddMatName)} от ${user.SelectedSupplier}, место ${user.SelectedRack}-${user.SelectedShelf}`
   editMenuMessage(text)
   clearCachedUserAdditionSection()
+  props.deleteProperty(`${userId}MenuSection`)
   greetUser()
-  // const demo = isUserAuthorized() ? '' : ' <tg-spoiler>, Демо-режим</tg-spoiler>'
-  // const text = `👌 списано <b>${amount}</b> кг <b>${matName}</b>, Остаток ${residue} кг${demo}`
-  // const keyboard = {inline_keyboard: createButtonsWriteOffMenu()}
-  // let [chatId, messageId] = editMessage(message.chat.id, message.message_id, text, keyboard)
-  // deleteMessages(message.chat.id, userId)
-  // editPrevReport(chatId)
-  // storeReportToEditNextTime(chatId, messageId, text)
-  // storeMenuMessage(messageId, text)
 }
 
 function tableNewPaintAppend(){
-  const sheet = ssApp.getSheetByName('ДОБАВЛЕНИЕ_ИСХОДНИК')
-  sheet.appendRow([].slice.call(arguments))
+  const data = [[].slice.call(arguments)]
+  setValuesUnderLastRow('СКЛАД', 4, data)
+}
+
+function setValuesUnderLastRow(sheetName, column, twoDimensionalArray){
+  const sheet = ssApp.getSheetByName(sheetName)
+  const curRange = sheet.getRange(sheet.getMaxRows(), column)
+  const row = curRange.getNextDataCell(SpreadsheetApp.Direction.UP).getLastRow() + 1
+  const col = curRange.getLastColumn()
+  const numRows = twoDimensionalArray.length
+  const numCols = Math.max(twoDimensionalArray.map(row => row.length))
+  const newRange = sheet.getRange(row, col, numRows, numCols)
+  newRange.setValues(twoDimensionalArray)
+}
+
+function getEmployeeName(userId) {
+  for (const row of getTableUser()){
+    if (row[0] === userId) return row[1]
+  }
+  return userId
 }
 
 function editMenuMessage(textNew=null, keyboard=null) {
@@ -434,10 +452,18 @@ function clearCachedUserAdditionSection() {
   user.SelectedSupplier = null
   user.SelectedRack = null
   user.SelectedShelf = null
+  user.Order = null
   saveCachedUser(user)
 }
 
 function selectNum() {
+  let section = props.getProperty(`${userId}MenuSection`)
+  if (section === 'WriteOffMenu') selectNumWriteOff()
+  if (section === 'AddMenu') updateTrioMenu()
+  deleteLastMessage()
+}
+
+function selectNumWriteOff() {
   const num = message.text.replaceAll('Заказ ', '');
   let keyboard = {inline_keyboard:
         [[{ "text": `Показать позиции по заказу ${num}`,
@@ -465,6 +491,7 @@ function confirmAmount() {
   } else if (section === 'AddMenu') {
     confirmAddition()
   }
+  deleteLastMessage()
 }
 
 function confirmWriteOff() {
@@ -552,6 +579,17 @@ function getTableStorage() {
   return result
 }
 
+function getTableSettings() {
+  const sheet = ssApp.getSheetByName('НАСТРОЙКИ')
+  const range = sheet.getRange(2, 1, 1000, 4)
+  const result = {nums: []}
+  for (const row of range.getValues()) {
+    const num = row[1]
+    if (row[1]) result.nums.push(num.toString())
+  }
+  return result
+}
+
 function getAllowedGroups(userId) {
   const tableUser = getTableUser()
   const allMats = tableUser[0].slice(2, -1)
@@ -583,19 +621,14 @@ function getTableNewPaint() {
 
 function processInlineQuery(){
   const query = update.inline_query.query
-  if (!query || query.length < 1){
-    answerInlineQuery(update.inline_query.id, [])
-    return
-  }
-  if (query === '#'){
-    answerInlineQuery(update.inline_query.id, getOrderNumberInlineResults(query).slice(0, 50))
-    return
-  }
-  if (query.startsWith('+') && query.length > 1){
-    answerInlineQuery(update.inline_query.id, getNewPaintNameInlineResults(query).slice(0, 50))
-    return
-  }
-  answerInlineQuery(update.inline_query.id, getNameInlineResults(query).slice(0, 50))
+  const isAdditionSection = props.getProperty(`${userId}MenuSection`) === 'AddMenu'
+  let results
+  if (!query || query.length < 1) results = []
+  else if (query.startsWith('#') && isAdditionSection) results = getOrderNumberAdditionInlineResults(query)
+  else if (query === '#') results = getOrderNumberInlineResults(query)
+  else if (query.startsWith('+') && query.length > 1) results = getNewPaintNameInlineResults(query)
+  else results = getNameInlineResults(query)
+  answerInlineQuery(update.inline_query.id, results.slice(0, 50))
 }
 
 function getNameInlineResults(query) {
@@ -690,6 +723,27 @@ function getOrderNumberInlineResults(query) {
       id: counter.toString(),
       type: 'article',
       title: `#${num} | ${orderNumbers[num]} шт.`,
+      input_message_content: {
+        message_text: 'Заказ ' + num
+      }
+    })
+  }
+  results = fillIfEmpty(results, query)
+  return results
+}
+
+function getOrderNumberAdditionInlineResults(query) {
+  query = query.replace('#', '')
+  let results = []
+  let counter = 0
+  const table = getTableSettings()
+  for (const num of table.nums) {
+    if (!num.includes(query)) continue
+    counter++
+    results.push({
+      id: counter.toString(),
+      type: 'article',
+      title: `${num}`,
       input_message_content: {
         message_text: 'Заказ ' + num
       }
