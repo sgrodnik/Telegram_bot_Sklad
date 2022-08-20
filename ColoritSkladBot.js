@@ -55,16 +55,23 @@ function processMessage(){
   message = update.message
   inline_query = update.inline_query
   userId = message ? message.from.id : inline_query ? inline_query.from.id : update.callback_query.from.id
-  if(inline_query){processInlineQuery()}
-  if(update.callback_query && update.callback_query.data.startsWith('Списать')){writeOff()}
-  if(update.callback_query && update.callback_query.data.startsWith('Меню')){switchMenu()}
-  if(update.callback_query && update.callback_query.data.startsWith('ТройноеМеню')){updateTrioMenu()}
-  if(update.callback_query && update.callback_query.data.startsWith('Добавить')){makeAddition()}
-  if(message && message.text && message.text.startsWith('/s')){greetUser()}
-  else if(message && message.text && message.text.startsWith('Выбрать')){selectMat()}
-  else if(message && message.text && message.text.startsWith('Заказ')){selectNum()}
-  else if(message && message.text && isFloat(message.text)){confirmAmount()}
-  else if(message){incorrectInput()}
+  if(inline_query){
+    processInlineQuery()
+  }
+  if(update.callback_query){
+    if(update.callback_query.data.startsWith('Списать'))     writeOff()
+    if(update.callback_query.data.startsWith('Меню'))        switchMenu()
+    if(update.callback_query.data.startsWith('ТройноеМеню')) updateTrioMenu()
+    if(update.callback_query.data.startsWith('Добавить'))    makeAddition()
+  }
+  if(message && message.text){
+    if(message.text.startsWith('/section'))     setSection()
+    else if(message.text.startsWith('/s'))      greetUser()
+    else if(message.text.startsWith('Выбрать')) selectMat()
+    else if(message.text.startsWith('Заказ'))   selectNum()
+    else if(isFloat(message.text))              confirmAmount()
+    else if(message){incorrectInput()}
+  }
 }
 
 function processInlineQuery(){
@@ -382,13 +389,15 @@ function storeMenuMessage(messageId, text) {
   props.setProperty(propName, JSON.stringify([messageId, text]))
 }
 
-function switchMenu() {
-  const action = update.callback_query.data.replace('Меню ', '')
+function switchMenu(act=null) {
+  const action = act || update.callback_query.data.replace('Меню ', '')
   switch (action.split(' ')[0]) {
     case 'Списание':
       props.setProperty(`${userId}MenuSection`, 'WriteOffMenu'); break
     case 'Добавление':
       props.setProperty(`${userId}MenuSection`, 'AddMenu'); break
+    case 'Регистрация':
+      props.setProperty(`${userId}MenuSection`, 'RegistrationMenu'); break
     case 'Показать':
       const selectedGroup = action.replace('Показать ', '')
       props.setProperty(`${userId}SelectedGroup`, selectedGroup); break
@@ -410,6 +419,8 @@ function createButtons() {
       return createButtonsWriteOffMenu()
     case 'AddMenu':
       return createButtonsAddMenu()
+    case 'RegistrationMenu':
+      return createButtonsRegistrationMenu()
   }
   return createButtonsMainMenu()
 }
@@ -494,6 +505,38 @@ function createButtonsWriteOffMenuLevelTwo() {
 }
 
 function createButtonsAddMenu() {
+  const groups = {}
+  for (const row of getTableNewPaint()) {
+    const group = row[0]
+    if (group === '') {continue}
+    if (!(group in groups)) {
+      groups[group] = 0
+    }
+    groups[group]++
+  }
+  const buttons = [{ "text": "Назад", 'callback_data': `Меню НазадГлавное` },
+                   { "text": "➕Общий поиск", 'switch_inline_query_current_chat': '+' }]
+  for (const groupName in groups) {
+    buttons.push({ "text": `${groupName} (${groups[groupName]})`,
+                   'switch_inline_query_current_chat': `+${groupName} `})
+  }
+  const buttonRows = []
+  let count = buttons.length;
+  if ((count % 2) === 0) {
+    for (const i of [...Array(count).keys()]) {
+      if ((i % 2) === 0) buttonRows.push([buttons[i], buttons[i + 1]])
+    }
+  } else {
+    count--
+    buttonRows.push([buttons.shift()])
+    for (const i of [...Array(count).keys()]) {
+      if ((i % 2) === 0) buttonRows.push([buttons[i], buttons[i + 1]])
+    }
+  }
+  return buttonRows
+}
+
+function createButtonsRegistrationMenu() {
   const groups = {}
   for (const row of getTableNewPaint()) {
     const group = row[0]
@@ -666,6 +709,24 @@ function clearCachedUserAdditionSection() {
   user.SelectedShelf = null
   user.Order = null
   saveCachedUser(user)
+}
+
+function setSection() {
+  const section = message.text.replace('/section_', '')
+  deleteLastMessage()
+  switch (section) {
+    case '0': {
+      const storage = props.getProperty(`${userId}MenuMessageId`)
+      let [messageId, _] = JSON.parse(storage)
+      deleteMessage(userId, messageId)
+      props.deleteProperty(`${userId}MenuSection`)
+      greetUser()
+      break // todo удалить старое меню если есть
+    }
+    case '1': switchMenu('Списание'); break
+    case '2': switchMenu('Добавление'); break
+    case '3': switchMenu('Регистрация'); break
+  }
 }
 
 function greetUser() {
@@ -858,3 +919,23 @@ function tableAppend(){
 function pass(){console.log(123)}
 
 function ClearCache(){props.deleteAllProperties()}
+
+function setMyCommands(){
+  const map = Array.prototype.map;
+  const botCommands = [
+    // {command: command, description: description},
+    {command: 'section_0', description: 'Главное меню'},
+    {command: 'section_1', description: 'Секция 1: Списание материалов'},
+    {command: 'section_2', description: 'Секция 2: Добавление материалов'},
+    {command: 'section_3', description: 'Секция 2: Регистрация деталей'},
+  ]
+  let data = {
+    method: 'post',
+    payload: {
+      method: 'setMyCommands',
+      commands: JSON.stringify(botCommands),
+    }
+  }
+  let response = UrlFetchApp.fetch(base, data)
+  Logger.log(JSON.parse(response.getContentText()))
+}
