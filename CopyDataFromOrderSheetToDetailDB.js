@@ -4,6 +4,7 @@ const ss = SpreadsheetApp.getActiveSpreadsheet()
 let orderName
 const DEBUG = 0
 let startTime
+const rowQuantity = 60
 
 function CopyDataFromOrderSheetToDetailDB(e) {
   startTime = now()
@@ -63,7 +64,7 @@ function getOrderName() {
 }
 
 function notifyProgress(title) {
-  const message = `Формирование листа заказа ${orderName}`
+  const message = `Копирование данных с листа заказа ${orderName} в базу деталей`
   showToast(message, title)
 }
 
@@ -87,23 +88,35 @@ function getTableAddressDb() {
 }
 
 function uniteCellAddressesToRanges(addresses) {
-  const rowQuantity = 60
   const ranges = []
-  for (const i of [...Array(addresses.length / rowQuantity).keys()]) {
+  for (const i of range_(addresses.length / rowQuantity)) {
     const address = addresses[i * rowQuantity]
+    if (!address){
+      ranges.push(null)
+      continue
+    }
     const columnLetter = (address.match(/\D/g,'') + '').replace(',','')
     const rowNumber = Number(address.replace(columnLetter, '')) + rowQuantity - 1
-    const rangeName = `${address}:${columnLetter}${rowNumber}`  // A1:A4
+    const rangeName = `${address}:${columnLetter}${rowNumber}`  // A1:A61
     ranges.push(rangeName)
   }
   return ranges
 }
 
-function copyData(addressRanges) {
+function range_(n) {
+    return [...Array(n).keys()]
+}
+
+function copyData(addressRangesWithGaps) {
   const orderSheet = ss.getSheetByName(orderName)
-  const ranges = orderSheet.getRangeList(addressRanges).getRanges()
+  const ranges = orderSheet.getRangeList(addressRangesWithGaps.filter(r => r)).getRanges()
   let values = []
   for (const range of ranges) values = values.concat(...range.getValues())
+  const empty = range_(rowQuantity).fill('')
+  for (const i of range_(addressRangesWithGaps.length)) {
+    if (addressRangesWithGaps[i]) continue
+    values.splice(i * rowQuantity, 0, ...empty);
+  }
   return values
 }
 
