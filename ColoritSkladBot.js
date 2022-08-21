@@ -5,9 +5,6 @@ const ssApp = SpreadsheetApp.openById(ssId)
 const props = PropertiesService.getScriptProperties()
 
 let update
-// let message
-// let user
-// let inline_query
 let user
 
 
@@ -30,7 +27,8 @@ function createOrFetchUser() {
   const paramName = update.message ? 'message'
                   : update.inline_query ? 'inline_query'
                   : update.callback_query ? 'callback_query'
-                  : throw 'Unexpected incoming kind received'
+                  : null
+  if (!paramName) throw 'Unexpected incoming kind received'
   const param = update[paramName]
   user = JSON.parse(props.getProperty(`User ${param.from.id}`)) || {
     writeOff: Object(),
@@ -40,12 +38,20 @@ function createOrFetchUser() {
   }
   user.id = param.from.id
   user.name = param.from.first_name || param.from.username || param.from.last_name
+  user.message = update.message
+  user.inline_query = update.inline_query
+  user.callback_query = update.callback_query
   user.lastVisit = new Date()
-  user.incomingKind = paramName
-  user[user.incomingKind] = param
+  user.debug = {functions: [arguments.callee.name]}
+}
+
+function addCurrentFuncToTrace() {
+  user.debug.functions.push(arguments.callee.caller.name)
+  saveUser()
 }
 
 function processUpdate(){
+  addCurrentFuncToTrace()
   if(user.inline_query){
     processInlineQuery()
   }
@@ -67,6 +73,7 @@ function processUpdate(){
 }
 
 function processInlineQuery(){
+  addCurrentFuncToTrace()
   const query = user.inline_query.query
   let results
   if (!query || query.length < 1) results = []
@@ -79,6 +86,7 @@ function processInlineQuery(){
 }
 
 function getOrderNumberAdditionInlineResults(query) {
+  addCurrentFuncToTrace()
   query = query.replace('#', '')
   let results = []
   let counter = 0
@@ -100,6 +108,7 @@ function getOrderNumberAdditionInlineResults(query) {
 }
 
 function getTableSettings() {
+  addCurrentFuncToTrace()
   const sheet = ssApp.getSheetByName('НАСТРОЙКИ')
   const range = sheet.getRange(2, 1, 1000, 4)
   const result = {nums: []}
@@ -111,6 +120,7 @@ function getTableSettings() {
 }
 
 function fillIfEmpty(results, query) {
+  addCurrentFuncToTrace()
   if (results.length === 0) {
     results.push({
       id: 1,
@@ -125,6 +135,7 @@ function fillIfEmpty(results, query) {
 }
 
 function getOrderNumberInlineResults(query) {
+  addCurrentFuncToTrace()
   const orderNumbers = {}
   for (const row of getTableStorage()) {
     const num = row[5];
@@ -153,6 +164,7 @@ function getOrderNumberInlineResults(query) {
 }
 
 function getTableStorage() {
+  addCurrentFuncToTrace()
   const sheet = ssApp.getSheetByName('СКЛАД')
   const range = sheet.getRange(4, 1, 500, 13)
   const result = []
@@ -166,6 +178,7 @@ function getTableStorage() {
 }
 
 function getAllowedGroups(userId) {
+  addCurrentFuncToTrace()
   const tableUser = getTableUser()
   const allMats = tableUser[0].slice(2, -1)
   for (const row_ of tableUser){
@@ -182,12 +195,14 @@ function getAllowedGroups(userId) {
 }
 
 function getTableUser() {
+  addCurrentFuncToTrace()
   const sheet = ssApp.getSheetByName('ПОЛЬЗОВАТЕЛИ')
   const range = sheet.getRange(3, 1, 50, 32)
   return range.getValues()
 }
 
 function getNewPaintNameInlineResults(query) {
+  addCurrentFuncToTrace()
   let results = []
   let counter = 0
   for (const row of getTableNewPaint()) {
@@ -212,6 +227,7 @@ function getNewPaintNameInlineResults(query) {
 }
 
 function getTableNewPaint() {
+  addCurrentFuncToTrace()
   const sheet = ssApp.getSheetByName('КРАСКА')
   const range = sheet.getRange(43, 1, 5000, 6)
   const result = range.getValues()
@@ -223,6 +239,7 @@ function clear(s) {
 }
 
 function getNameInlineResults(query) {
+  addCurrentFuncToTrace()
   let results = []
   let counter = 0
   for (const row of getTableStorage()) {
@@ -258,6 +275,7 @@ function getNameInlineResults(query) {
 }
 
 function humanize(name, place, residue, id) {
+  addCurrentFuncToTrace()
   let s = JSON.stringify([name, 'Место ' + place, residue + ' кг', 'id' + id])
   s = s.replace('["', ': ')
   s = s.replace('"]', '')
@@ -266,6 +284,7 @@ function humanize(name, place, residue, id) {
 }
 
 function answerInlineQuery(inline_query_id, results){
+  addCurrentFuncToTrace()
   let data = {
     method: 'post',
     payload: {
@@ -279,6 +298,7 @@ function answerInlineQuery(inline_query_id, results){
 }
 
 function writeOff() {
+  addCurrentFuncToTrace()
   const callbackQuery = user.callback_query
   const amount = callbackQuery.data.replace('Списать ', '')
   const [matName, matId] = user.writeOff.matNameAndMatId
@@ -300,16 +320,18 @@ function writeOff() {
   deleteMessages(message.chat.id, user.id)
   editPrevReport(chatId)
   storeReportToEditNextTime(chatId, messageId, text)
-  storeMenuMessage(messageId, text)
+  storeMenuMessage(messageId, text, keyboard)
 }
 
 function toDate(unixTimestamp){
+  addCurrentFuncToTrace()
   const milliseconds = unixTimestamp * 1000
   const dateObject = new Date(milliseconds)
-  return now(date=dateObject)
+  return now(dateObject)
 }
 
 function isUserAuthorized() {
+  addCurrentFuncToTrace()
   for (const row_ of getTableUser()){
     if (user.id === row_[0]){
       return true
@@ -319,6 +341,7 @@ function isUserAuthorized() {
 }
 
 function editMessage(chatId, messageId, text, keyboard=null){
+  addCurrentFuncToTrace()
   let data = {
     method: 'post',
     payload: {
@@ -329,15 +352,17 @@ function editMessage(chatId, messageId, text, keyboard=null){
       parse_mode: 'HTML',
       reply_markup: keyboard ? JSON.stringify(keyboard) : ''
     },
-    muteHttpExceptions: true
+    // muteHttpExceptions: true
   }
   let response = UrlFetchApp.fetch(base, data)
   let chatId_ = JSON.parse(response.getContentText()).result.chat.id
   let messageId_ = JSON.parse(response.getContentText()).result.message_id
+  // printToSG('result:\n' + JSON.stringify(result, null, 4))
   return [chatId_, messageId_]
 }
 
 function deleteMessages() {
+  addCurrentFuncToTrace()
   for (const message of user.messages) {
     deleteMessage(user.id, message.id)
   }
@@ -346,6 +371,7 @@ function deleteMessages() {
 }
 
 function deleteMessage(chatId, messageId){
+  addCurrentFuncToTrace()
   let data = {
     method: 'post',
     payload: {
@@ -353,12 +379,13 @@ function deleteMessage(chatId, messageId){
       chat_id: String(chatId),
       message_id: Number(messageId)
     },
-    muteHttpExceptions: true
+    // muteHttpExceptions: true
   }
   let response = UrlFetchApp.fetch(base, data)
 }
 
 function editPrevReport(chatId) {
+  addCurrentFuncToTrace()
   let [messageId, text] = user.reportMessage
   user.reportMessage = null
   saveUser()
@@ -366,16 +393,19 @@ function editPrevReport(chatId) {
 }
 
 function storeReportToEditNextTime(fromId, messageId, text) {
+  addCurrentFuncToTrace()
   user.reportMessage = {id: messageId, text: text}
   saveUser()
 }
 
-function storeMenuMessage(messageId, text) {
+function storeMenuMessage(messageId, text, keyboard) {
+  addCurrentFuncToTrace()
   user.menuMessage = {id: messageId, text: text, keyboard: keyboard}
   saveUser()
 }
 
 function switchMenu(act=null) {
+  addCurrentFuncToTrace()
   const action = act || user.callback_query.data.replace('Меню ', '')
   switch (action.split(' ')[0]) {
     case 'Списание':
@@ -399,6 +429,7 @@ function switchMenu(act=null) {
 }
 
 function createButtons() {
+  addCurrentFuncToTrace()
   switch (user.menuSection){
     case 'WriteOffMenu':
       return createButtonsWriteOffMenu()
@@ -409,6 +440,7 @@ function createButtons() {
 }
 
 function createButtonsWriteOffMenu() {
+  addCurrentFuncToTrace()
   if (!user.writeOff.selectedGroup) {
     return createButtonsWriteOffMenuLevelOne()
   } else {
@@ -417,6 +449,7 @@ function createButtonsWriteOffMenu() {
 }
 
 function createButtonsWriteOffMenuLevelOne() {
+  addCurrentFuncToTrace()
   const groups = {}
   for (const row of getTableStorage()) {
     const group = row[1]
@@ -452,6 +485,7 @@ function createButtonsWriteOffMenuLevelOne() {
 }
 
 function createButtonsWriteOffMenuLevelTwo() {
+  addCurrentFuncToTrace()
   const subgroups = {}
   for (const row of getTableStorage()) {
     const group = row[1]
@@ -486,6 +520,7 @@ function createButtonsWriteOffMenuLevelTwo() {
 }
 
 function createButtonsAddMenu() {
+  addCurrentFuncToTrace()
   const groups = {}
   for (const row of getTableNewPaint()) {
     const group = row[0]
@@ -518,6 +553,7 @@ function createButtonsAddMenu() {
 }
 
 function createButtonsMainMenu() {
+  addCurrentFuncToTrace()
   const buttons = [
     [{"text": `➖Списание`, 'callback_data': `Меню Списание`}],
     [{"text": `➕Добавление`, 'callback_data': `Меню Добавление`}],
@@ -526,6 +562,7 @@ function createButtonsMainMenu() {
 }
 
 function updateTrioMenu() {
+  addCurrentFuncToTrace()
   const action = user.message ? user.message.text.replace('ТройноеМеню ', '')
                               : user.callback_query.data.replace('ТройноеМеню ', '')
   const field = action.split(' ')[0]
@@ -548,6 +585,7 @@ function updateTrioMenu() {
 }
 
 function createButtonsTrioMenu() {
+  addCurrentFuncToTrace()
   const rows = [
     ['С1',  'П1', 'РГ ГРУПП'],
     ['С2',  'П2', 'Бонвио'],
@@ -589,6 +627,7 @@ function createButtonsTrioMenu() {
 }
 
 function makeAddition() {
+  addCurrentFuncToTrace()
   const uA = user.addition
   const date = toDate(user.callback_query.message.date)
   tableNewPaintAppend(uA.matName, uA.supplier, uA.order, uA.rack,
@@ -602,11 +641,13 @@ function makeAddition() {
 }
 
 function tableNewPaintAppend(){
+  addCurrentFuncToTrace()
   const data = [[].slice.call(arguments)]
   setValuesUnderLastRow('СКЛАД', 4, data)
 }
 
 function setValuesUnderLastRow(sheetName, column, twoDimensionalArray){
+  addCurrentFuncToTrace()
   const sheet = ssApp.getSheetByName(sheetName)
   const curRange = sheet.getRange(sheet.getMaxRows(), column)
   const row = curRange.getNextDataCell(SpreadsheetApp.Direction.UP).getLastRow() + 1
@@ -618,19 +659,24 @@ function setValuesUnderLastRow(sheetName, column, twoDimensionalArray){
 }
 
 function getEmployeeName(userId) {
+  addCurrentFuncToTrace()
   for (const row of getTableUser()){
     if (row[0] === userId) return row[1]
   }
   return userId
 }
 
-function editMenuMessage(textNew=null, keyboard=null) {
-  const [messageId, textOld] = Object.values(user.menuMessageId)
-  editMessage(user.id, messageId, textNew || textOld, keyboard)
-  storeMenuMessage(messageId, textNew)
+function editMenuMessage(textNew=null, keyboardNew=null) {
+  addCurrentFuncToTrace()
+  const [messageId, textOld, keyboardOld] = Object.values(user.menuMessage)
+  const isKbIdentical = JSON.stringify(keyboardOld) === JSON.stringify(keyboardNew)
+  if (isKbIdentical && (textOld === textNew || !textNew)) return
+  editMessage(user.id, messageId, textNew || textOld, keyboardNew)
+  storeMenuMessage(messageId, textNew || textOld, keyboardNew)
 }
 
 function setSection() {
+  addCurrentFuncToTrace()
   const section = user.message.text.replace('/section_', '')
   deleteLastMessage()
   switch (section) {
@@ -651,18 +697,21 @@ function setSection() {
 }
 
 function greetUser() {
-  if(isUserAuthorized()) {
+  addCurrentFuncToTrace()
+  let text
+  if (isUserAuthorized()) {
     text = `Привет, ${user.name}! Давай найдём материал:`
   } else {
     text = `Привет, ${user.name}! Это демо-режим бота, т.к. твой id ${user.id} не зарегистрирован – действия не будут учтены в таблице. \nОбратись к администратору, чтобы тебя подключили к системе или давай продолжим так и просто потестим бота`
   }
   let keyboard = {inline_keyboard: createButtons()}
-  let [chatId, messageId] = sendMessageToUser(text, keyboard)
-  storeMessageId(chatId, messageId)
-  storeMenuMessage(messageId, text)
+  let [_, messageId] = sendMessageToUser(text, keyboard)
+  storeMessageId(messageId)
+  storeMenuMessage(messageId, text, keyboard)
 }
 
 function sendMessageToUser(text, keyboard=null){
+  addCurrentFuncToTrace()
   return sendMessage(user.id, text, keyboard)
 }
 
@@ -690,23 +739,26 @@ function sendMessageToSG(text, keyboard=null){
 }
 
 function selectMat() {
+  addCurrentFuncToTrace()
   if (user.menuSection === 'WriteOffMenu') selectMatWriteOff()
   if (user.menuSection === 'AddMenu') selectMatAddition()
   deleteLastMessage()
 }
 
 function selectMatWriteOff() {
+  addCurrentFuncToTrace()
   const mes = user.message.text.replaceAll('Выбрать ', '')
   let [matName, _, residue, matId] = machinize(mes)
   user.writeOff.matNameAndMatId = [matName, matId]
   saveUser()
   props.setProperty(matId, residue)
   let text = `Введи количество ≤ ${residue} кг`
-  let [chatId, messageId] = sendMessageToUser(text)
-  storeMessageId(chatId, messageId)
+  let [__, messageId] = sendMessageToUser(text)
+  storeMessageId(messageId)
 }
 
 function machinize(s) {
+  addCurrentFuncToTrace()
   s = s.replace(': ', '["')
   s = s + '"]'
   s = s.replaceAll(' | ', '","')
@@ -717,11 +769,13 @@ function machinize(s) {
 }
 
 function storeMessageId(messageId=null) {
+  addCurrentFuncToTrace()
   user.messages.push(messageId || user.message.message_id)
   saveUser()
 }
 
 function selectMatAddition() {
+  addCurrentFuncToTrace()
   user.addition.matName = user.message.text.replaceAll('Выбрать ', '')
   saveUser()
   let text = `Введи количество ${clear(user.addition.matName)} в кг`
@@ -729,26 +783,30 @@ function selectMatAddition() {
 }
 
 function selectNum() {
+  addCurrentFuncToTrace()
   if (user.menuSection === 'WriteOffMenu') selectNumWriteOff()
   if (user.menuSection === 'AddMenu') updateTrioMenu()
   deleteLastMessage()
 }
 
 function selectNumWriteOff() {
+  addCurrentFuncToTrace()
   const num = user.message.text.replaceAll('Заказ ', '');
   let keyboard = {inline_keyboard:
         [[{ "text": `Показать позиции по заказу ${num}`,
           'switch_inline_query_current_chat': `#${num}` }]]
   }
-  let [chatId, messageId] = sendMessageToUser(`👇`, keyboard)
-  storeMessageId(chatId, messageId)
+  let [_, messageId] = sendMessageToUser(`👇`, keyboard)
+  storeMessageId(messageId)
 }
 
 function deleteLastMessage(){
+  addCurrentFuncToTrace()
   deleteMessage(user.message.chat.id, user.message.message_id)
 }
 
 function isFloat(str){
+  addCurrentFuncToTrace()
   str = str.replaceAll(',', '.')
   const allowedChars = ['1','2','3','4','5','6','7','8','9','0','.']
   for (let i = 0; i < str.length; i++) {
@@ -760,19 +818,21 @@ function isFloat(str){
 }
 
 function confirmAmount() {
+  addCurrentFuncToTrace()
   if (user.menuSection === 'WriteOffMenu') confirmWriteOff()
   if (user.menuSection === 'AddMenu') confirmAddition()
   deleteLastMessage()
 }
 
 function confirmWriteOff() {
+  addCurrentFuncToTrace()
   let amount = String(parseFloat(user.message.text.replace(',', '.'))).replace('.', ',')
   let [matName, matId] = user.writeOff.matNameAndMatId
   const residue = props.getProperty(matId).replace(',', '.')
   if(parseFloat(amount.replace(',', '.')) > parseFloat(residue)){
     let caption = `Введи количество <b>≤ ${residue}</b> кг`
-    let [chatId, messageId] = sendIncorrectInputAnimation(user.id, caption)
-    storeMessageId(chatId, messageId)
+    let [_, messageId] = sendIncorrectInputAnimation(user.id, caption)
+    storeMessageId(messageId)
     return
   }
   let text = `Подтверди списание <b>${amount}</b> кг <b>${matName}</b> или введи другое количество`
@@ -783,6 +843,7 @@ function confirmWriteOff() {
 }
 
 function confirmAddition() {
+  addCurrentFuncToTrace()
   const amount = String(parseFloat(user.message.text.replace(',', '.'))).replace('.', ',')
   user.addition.amount = amount
   saveUser()
@@ -792,12 +853,14 @@ function confirmAddition() {
 }
 
 function incorrectInput() {
+  addCurrentFuncToTrace()
   const caption = 'Я не понял что ты сказал, повтори еще раз'
-  let [chatId, messageId] = sendIncorrectInputAnimation(user.id, caption)
-  storeMessageId(chatId, messageId)
+  let [_, messageId] = sendIncorrectInputAnimation(user.id, caption)
+  storeMessageId(messageId)
 }
 
 function sendIncorrectInputAnimation(chatId, caption=''){
+  addCurrentFuncToTrace()
   const neozhidannoGif = 'CgACAgQAAxkBAAIHTWLNdvbly1yGur2EK9J6IRU9snfHAAImAwAC-0UFU_0l6KYHG0w9KQQ';
   let data = {
     method: 'post',
@@ -821,6 +884,7 @@ function printToSG(text) {
 }
 
 function now(date=0){
+  addCurrentFuncToTrace()
   if(!date){
     date = new Date()
   }
@@ -834,6 +898,7 @@ function now(date=0){
 }
 
 function tableAppend(){
+  addCurrentFuncToTrace()
   const sheet = ssApp.getSheetByName('ЖУРНАЛ_ИСХОДНИК')
   sheet.appendRow([].slice.call(arguments))
 }
