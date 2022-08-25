@@ -99,15 +99,15 @@ function getRegistrationInlineResults(query) {
   if (query.startsWith('ShowWorks')) {
     query = query.replace('ShowWorks', '').trim()
     const works = getTablesRegistration('works')
-    for (const work of works[user.reg.workType] || []) {
+    for (const work of works) {
       counter++
       if (query && !work.toLowerCase().includes(query.toLowerCase())) continue
       results.push({
         id: counter.toString(),
         type: 'article',
-        title: `${user.reg.workType}: ${work}`,
+        title: `${work.type}: ${work.work}`,
         input_message_content: {
-          message_text: 'Registration Set work ' + work
+          message_text: 'Registration Set workId ' + work.id
         }
       })
     }
@@ -158,6 +158,7 @@ function getTablesRegistration(what) {
   if (what === 'details'){
     const details = []
     for (const row of getCachedTables().details) {
+      if (!row[0]) continue
       const orNum = row[0]
       const detNum = row[1]
       const size = row[2]
@@ -171,12 +172,10 @@ function getTablesRegistration(what) {
     }
     return details
   }
-  const works = {}
+  const works = []
   for (const row of getCachedTables().works) {
-    const kind = row[0]
-    const work = row[2]
-    if (!(kind in works)) works[kind] = []
-    works[kind].push(work)
+    if (!row[0]) continue
+    works.push({id: row[0], type: row[1], work: row[3]})
   }
   return works
 }
@@ -546,7 +545,7 @@ function cacheRegistrationTables() {
   const sheetD = ss.getSheetByName('Детали')
   const rangeDetails = sheetD.getRange(2, 1, sheetD.getMaxRows(), 4)
   const sheetW = ss.getSheetByName('Работы')
-  const rangeWorks = sheetW.getRange(2, 1, sheetW.getMaxRows(), 3)
+  const rangeWorks = sheetW.getRange(2, 1, sheetW.getMaxRows(), 4)
   cachedTables = {
     details: rangeDetails.getValues(),
     works: rangeWorks.getValues()
@@ -560,6 +559,9 @@ function getCachedTables() {
 
 function showRegistrationMenu() {
   addCurrentFuncToTrace()
+  const theWork = getTablesRegistration('works').filter(w=>w.id.toString() === user.reg.workId)[0]
+  user.reg.workType = theWork ? theWork.type : null
+  user.reg.work = theWork ? theWork.work : null
   const text = `Для отчёта о работе заполни форму:
 Вид работ: ${user.reg.workType || '-'}
 Работа: ${user.reg.work || '-'}
@@ -599,8 +601,7 @@ function createButtonsRegistrationMenu() {
     }
   }
   if (
-    user.reg.workType &&
-    user.reg.work &&
+    user.reg.workId &&
     user.reg.orderNum &&
     user.reg.detailNum &&
     user.reg.quantity
@@ -609,12 +610,9 @@ function createButtonsRegistrationMenu() {
     confirmText = 'Готово ✓'
   }
   return [
-      [{"text": "Фрезеровка",         'callback_data': `Registration Set workType Фрезеровка`},
-       {"text": "Прямые",             'callback_data': `Registration Set workType Прямые`},
-       {"text": "Шпон/стол.",         'callback_data': `Registration Set workType Шпон/стол.`}],
-      [{"text": "Выбрать работу",     'switch_inline_query_current_chat': 'ShowWorks '}],
       [{"text": "Выбрать № заказа",   'switch_inline_query_current_chat': 'ShowOrderNums '}],
       [{"text": "Выбрать № детали",   'switch_inline_query_current_chat': 'ShowDetailNums '}],
+      [{"text": "Выбрать работу",     'switch_inline_query_current_chat': 'ShowWorks '}],
       [{"text": maxText,              'callback_data': maxCall},
        {"text": minText,              'callback_data': minCall},
        {"text": manualText,           'callback_data': `pass` }],
@@ -750,8 +748,8 @@ function createButtonsAddMenu() {
 function createButtonsMainMenu() {
   addCurrentFuncToTrace()
   return [
-    [{"text": `➖Списание материалов`, 'callback_data': `Меню Списание`}],
-    [{"text": `➕Добавление материалов`, 'callback_data': `Меню Добавление`}],
+    [{"text": `➖Списание со склада`, 'callback_data': `Меню Списание`}],
+    [{"text": `➕Добавление на склад`, 'callback_data': `Меню Добавление`}],
     [{"text": `💲Отчёт о работе`, 'callback_data': `Меню Регистрация`}],
   ]
 }
@@ -889,7 +887,7 @@ function applyRegistration() {
   addCurrentFuncToTrace()
   const uR = user.reg
   const date = toDate(user.callback_query.message.date)
-  tableRegistrationAppend(date, user.id, uR.workType, uR.work,  uR.orderNum,  uR.detailNum, uR.quantity)
+  tableRegistrationAppend(user.lastVisit, user.id, uR.workType, uR.work,  uR.orderNum,  uR.detailNum, uR.quantity)
   const text = user.menuMessage.text.replace('Для отчёта о работе заполни форму',
                                              '👌 Отчёт о работе принят')
   user.reg = {}
