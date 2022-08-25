@@ -1,7 +1,6 @@
 // wrapper: https://script.google.com/home/projects/1xxcmtRKO5Xe7a0dBeZ_Ypo-s-5xgam9-loG-Nsd1RfcfGkpLa1CY0UYz/edit
 const base = 'https://api.telegram.org/bot' + token + '/'
 const ssIdSpisanieColorit = '1dldSXJPoAj0Ni5G-LuklyOhBIqTn_BIfkMt5oeO4EoI'
-const ss = SpreadsheetApp.openById(ssIdSpisanieColorit)
 const ssIdColSdelkaDetWorks = '1BusvTFU8zoEIg727bk6IxBe88S-B2WfFxLHux7xc4BY'
 const ssIdSdelka = '1jf-3SuKyVneiQNWv7616OOrZLP7UGK8qrvhw2AGQSqI'
 const props = PropertiesService.getScriptProperties()
@@ -9,6 +8,7 @@ const props = PropertiesService.getScriptProperties()
 let update
 let user
 let cachedTables
+const cachedSss = {}
 
 
 const DEBUG = 0
@@ -205,7 +205,7 @@ function getOrderNumberAdditionInlineResults(query) {
 
 function getTableSettings() {
   addCurrentFuncToTrace()
-  const sheet = ss.getSheetByName('НАСТРОЙКИ')
+  const sheet = getSs(ssIdSpisanieColorit).getSheetByName('НАСТРОЙКИ')
   const range = sheet.getRange(2, 1, 1000, 4)
   const result = {nums: []}
   for (const row of range.getValues()) {
@@ -213,6 +213,13 @@ function getTableSettings() {
     if (num) result.nums.push(num.toString())
   }
   return result
+}
+
+function getSs(ssId) {
+  addCurrentFuncToTrace()
+  if (ssId in cachedSss) return cachedSss[ssId]
+  cachedSss[ssId] = SpreadsheetApp.openById(ssId)
+  return cachedSss[ssId]
 }
 
 function fillIfEmpty(results, query) {
@@ -261,7 +268,7 @@ function getOrderNumberInlineResults(query) {
 
 function getTableStorage() {
   addCurrentFuncToTrace()
-  const sheet = ss.getSheetByName('СКЛАД')
+  const sheet = getSs(ssIdSpisanieColorit).getSheetByName('СКЛАД')
   const range = sheet.getRange(4, 1, 500, 13)
   const result = []
   let allowedGroups = getAllowedGroups(user.id)
@@ -292,7 +299,7 @@ function getAllowedGroups(userId) {
 
 function getTableUser() {
   addCurrentFuncToTrace()
-  const sheet = ss.getSheetByName('ПОЛЬЗОВАТЕЛИ')
+  const sheet = getSs(ssIdSpisanieColorit).getSheetByName('ПОЛЬЗОВАТЕЛИ')
   const range = sheet.getRange(3, 1, 50, 32)
   return range.getValues()
 }
@@ -324,7 +331,7 @@ function getNewPaintNameInlineResults(query) {
 
 function getTableNewPaint() {
   addCurrentFuncToTrace()
-  const sheet = ss.getSheetByName('КРАСКА')
+  const sheet = getSs(ssIdSpisanieColorit).getSheetByName('КРАСКА')
   const range = sheet.getRange(43, 1, 5000, 6)
   const result = range.getValues()
   return result
@@ -535,7 +542,7 @@ function saveUser() {
 
 function cacheRegistrationTables() {
   addCurrentFuncToTrace()
-  const ss = SpreadsheetApp.openById(ssIdColSdelkaDetWorks)
+  const ss = getSs(ssIdColSdelkaDetWorks)
   const sheetD = ss.getSheetByName('Детали')
   const rangeDetails = sheetD.getRange(2, 1, sheetD.getMaxRows(), 4)
   const sheetW = ss.getSheetByName('Работы')
@@ -592,11 +599,7 @@ function createButtonsRegistrationMenu() {
     }
   }
   if (
-    user.reg.workType &&
-    user.reg.work &&
-    user.reg.orderNum &&
-    user.reg.detailNum &&
-    user.reg.quantity
+    1
   ) {
     confirmCall = 'Registration Apply'
     confirmText = 'Зарегистрировать ✓'
@@ -830,13 +833,12 @@ function makeAddition() {
 function tableNewPaintAppend(){
   addCurrentFuncToTrace()
   const data = [[].slice.call(arguments)]
-  setValuesUnderLastRow(null, 'СКЛАД', 4, data)
+  setValuesUnderLastRow('СКЛАД', 4, data)
 }
 
-function setValuesUnderLastRow(ssId=null, sheetName, column, twoDimensionalArray){
+function setValuesUnderLastRow(sheetName, column, twoDimensionalArray, ssId = ssIdSpisanieColorit){
   addCurrentFuncToTrace()
-  const customSs = ssId ? SpreadsheetApp.openById(ssId) : null
-  const sheet = (ssId ? customSs : ss).getSheetByName(sheetName)
+  const sheet = getSs(ssId).getSheetByName(sheetName)
   const curRange = sheet.getRange(sheet.getMaxRows(), column)
   const row = curRange.getNextDataCell(SpreadsheetApp.Direction.UP).getLastRow() + 1
   const col = curRange.getLastColumn()
@@ -896,7 +898,7 @@ function applyRegistration() {
 function tableRegistrationAppend(){
   addCurrentFuncToTrace()
   const data = [[].slice.call(arguments)]
-  setValuesUnderLastRow(ssIdColSdelkaDetWorks, 'ЖУРНАЛ РАБОТ', 2, data)
+  setValuesUnderLastRow('ЖУРНАЛ РАБОТ', 2, data, ssIdColSdelkaDetWorks)
 }
 
 function setSection() {
@@ -964,9 +966,9 @@ function sendMessageToSG(text, keyboard=null){
 
 function selectMat() {
   addCurrentFuncToTrace()
+  deleteLastMessage()
   if (user.menuSection === 'WriteOffMenu') selectMatWriteOff()
   if (user.menuSection === 'AddMenu') selectMatAddition()
-  deleteLastMessage()
 }
 
 function selectMatWriteOff() {
@@ -1008,9 +1010,9 @@ function selectMatAddition() {
 
 function selectNum() {
   addCurrentFuncToTrace()
+  deleteLastMessage()
   if (user.menuSection === 'WriteOffMenu') selectNumWriteOff()
   if (user.menuSection === 'AddMenu') updateTrioMenu()
-  deleteLastMessage()
 }
 
 function selectNumWriteOff() {
@@ -1043,9 +1045,10 @@ function isFloat(str){
 
 function confirmAmount() {
   addCurrentFuncToTrace()
+  deleteLastMessage()
   if (user.menuSection === 'WriteOffMenu') confirmWriteOff()
   if (user.menuSection === 'AddMenu') confirmAddition()
-  deleteLastMessage()
+  if (user.menuSection === 'RegistrationMenu') confirmRegistration()
 }
 
 function confirmWriteOff() {
@@ -1074,6 +1077,13 @@ function confirmAddition() {
   let text = `Для добавления <b>${amount}</b> кг <b>${clear(user.addition.matName)}</b> выбери поставщика, стеллаж и полку или введи другое количество.`
   const keyboard = {inline_keyboard: createButtonsTrioMenu()}
   editMenuMessage(text, keyboard)
+}
+
+function confirmRegistration() {
+  addCurrentFuncToTrace()
+  user.reg.quantity = String(parseFloat(user.message.text.replace(',', '.'))).replace('.', ',')
+  saveUser()
+  showRegistrationMenu()
 }
 
 function incorrectInput() {
@@ -1123,7 +1133,7 @@ function now(date=0){
 
 function tableAppend(){
   addCurrentFuncToTrace()
-  const sheet = ss.getSheetByName('ЖУРНАЛ_ИСХОДНИК')
+  const sheet = getSs(ssIdSpisanieColorit).getSheetByName('ЖУРНАЛ_ИСХОДНИК')
   sheet.appendRow([].slice.call(arguments))
 }
 
