@@ -1,11 +1,14 @@
 // wrapper: https://script.google.com/home/projects/1xxcmtRKO5Xe7a0dBeZ_Ypo-s-5xgam9-loG-Nsd1RfcfGkpLa1CY0UYz/edit
 const base = 'https://api.telegram.org/bot' + token + '/'
-const ssId = '1dldSXJPoAj0Ni5G-LuklyOhBIqTn_BIfkMt5oeO4EoI'
-const ssApp = SpreadsheetApp.openById(ssId)
+const ssIdSpisanieColorit = '1dldSXJPoAj0Ni5G-LuklyOhBIqTn_BIfkMt5oeO4EoI'
+const ss = SpreadsheetApp.openById(ssIdSpisanieColorit)
+const ssIdColSdelkaDetWorks = '1BusvTFU8zoEIg727bk6IxBe88S-B2WfFxLHux7xc4BY'
+const ssIdSdelka = '1jf-3SuKyVneiQNWv7616OOrZLP7UGK8qrvhw2AGQSqI'
 const props = PropertiesService.getScriptProperties()
 
 let update
 let user
+let cachedTables
 
 
 const DEBUG = 0
@@ -56,18 +59,20 @@ function processUpdate(){
     processInlineQuery()
   }
   if(user.callback_query){
-    if(user.callback_query.data.startsWith('Списать'))     writeOff()
-    if(user.callback_query.data.startsWith('Меню'))        switchMenu()
-    if(user.callback_query.data.startsWith('ТройноеМеню')) updateTrioMenu()
-    if(user.callback_query.data.startsWith('Добавить'))    makeAddition()
+    if(user.callback_query.data.startsWith('Списать'))      writeOff()
+    if(user.callback_query.data.startsWith('Меню'))         switchMenu()
+    if(user.callback_query.data.startsWith('ТройноеМеню'))  updateTrioMenu()
+    if(user.callback_query.data.startsWith('Добавить'))     makeAddition()
+    if(user.callback_query.data.startsWith('Registration')) processRegistration()
   }
   if(user.message && user.message.text){
-    if(user.message.text.startsWith('/section'))     setSection()
-    else if(user.message.text.startsWith('/s'))      greetUser()
-    else if(user.message.text.startsWith('Выбрать')) selectMat()
-    else if(user.message.text.startsWith('Заказ'))   selectNum()
-    else if(isFloat(user.message.text))              confirmAmount()
-    else if(user.message){incorrectInput()}
+    if(user.message.text.startsWith('/section'))          setSection()
+    else if(user.message.text.startsWith('/s'))           greetUser()
+    else if(user.message.text.startsWith('Выбрать'))      selectMat()
+    else if(user.message.text.startsWith('Заказ'))        selectNum()
+    else if(user.message.text.startsWith('Registration')) processRegistration()
+    else if(isFloat(user.message.text))                   confirmAmount()
+    else if(user.message)                                 incorrectInput()
   }
   // todo оповестить о непонятке и удалить
 }
@@ -77,12 +82,103 @@ function processInlineQuery(){
   const query = user.inline_query.query
   let results
   if (!query || query.length < 1) results = []
+  else if (user.menuSection === 'RegistrationMenu')
+    results = getRegistrationInlineResults(query)
   else if (query.startsWith('#') && user.menuSection === 'AddMenu')
     results = getOrderNumberAdditionInlineResults(query)
   else if (query === '#') results = getOrderNumberInlineResults(query)
   else if (query.startsWith('+') && query.length > 1) results = getNewPaintNameInlineResults(query)
   else results = getNameInlineResults(query)
   answerInlineQuery(user.inline_query.id, results.slice(0, 50))
+}
+
+function getRegistrationInlineResults(query) {
+  addCurrentFuncToTrace()
+  let results = []
+  let counter = 0
+  if (query.startsWith('ShowWorks')) {
+    query = query.replace('ShowWorks', '').trim()
+    const works = getTablesRegistration('works')
+    for (const work of works[user.reg.workType] || []) {
+      counter++
+      if (query && !work.toLowerCase().includes(query.toLowerCase())) continue
+      results.push({
+        id: counter.toString(),
+        type: 'article',
+        title: `${user.reg.workType}: ${work}`,
+        input_message_content: {
+          message_text: 'Registration Set work ' + work
+        }
+      })
+    }
+  }
+  if (query.startsWith('ShowOrderNums')) {
+    query = query.replace('ShowOrderNums', '').trim()
+    const details = getTablesRegistration('details')
+    const unique = []
+    for (const detail of details) {
+      if (unique.includes(detail.orNum)) continue
+      unique.push(detail.orNum)
+      counter++
+      if (query && !detail.orNum.toLowerCase().includes(query.toLowerCase())) continue
+      results.push({
+        id: counter.toString(),
+        type: 'article',
+        title: `Заказ № ${detail.orNum}`,
+        input_message_content: {
+          message_text: 'Registration Set orderNum ' + detail.orNum
+        }
+      })
+    }
+  }
+  if (query.startsWith('ShowDetailNums')) {
+    query = query.replace('ShowDetailNums', '').trim()
+    const details = getTablesRegistration('details')
+    for (const detail of details) {
+      if (user.reg.orderNum !== detail.orNum) continue
+      counter++
+      if (query && !detail.detNum.toLowerCase().includes(query.toLowerCase())) continue
+      results.push({
+        id: counter.toString(),
+        type: 'article',
+        title: `Деталь ${detail.detNum}: ${detail.size} - ${detail.quantity} шт.`,
+        input_message_content: {
+          message_text: 'Registration Set detailNum ' + detail.detNum
+        }
+      })
+    }
+  }
+
+  results = fillIfEmpty(results, query)
+  return results
+}
+
+function getTablesRegistration(what) {
+  addCurrentFuncToTrace()
+  if (what === 'details'){
+    const details = []
+    for (const row of getCachedTables().details) {
+      const orNum = row[0]
+      const detNum = row[1]
+      const size = row[2]
+      const quantity = row[3]
+      if (orNum && quantity) details.push({
+        orNum: orNum,
+        detNum: detNum,
+        size: size,
+        quantity: quantity,
+      })
+    }
+    return details
+  }
+  const works = {}
+  for (const row of getCachedTables().works) {
+    const kind = row[0]
+    const work = row[2]
+    if (!(kind in works)) works[kind] = []
+    works[kind].push(work)
+  }
+  return works
 }
 
 function getOrderNumberAdditionInlineResults(query) {
@@ -109,12 +205,12 @@ function getOrderNumberAdditionInlineResults(query) {
 
 function getTableSettings() {
   addCurrentFuncToTrace()
-  const sheet = ssApp.getSheetByName('НАСТРОЙКИ')
+  const sheet = ss.getSheetByName('НАСТРОЙКИ')
   const range = sheet.getRange(2, 1, 1000, 4)
   const result = {nums: []}
   for (const row of range.getValues()) {
     const num = row[1]
-    if (row[1]) result.nums.push(num.toString())
+    if (num) result.nums.push(num.toString())
   }
   return result
 }
@@ -165,7 +261,7 @@ function getOrderNumberInlineResults(query) {
 
 function getTableStorage() {
   addCurrentFuncToTrace()
-  const sheet = ssApp.getSheetByName('СКЛАД')
+  const sheet = ss.getSheetByName('СКЛАД')
   const range = sheet.getRange(4, 1, 500, 13)
   const result = []
   let allowedGroups = getAllowedGroups(user.id)
@@ -196,7 +292,7 @@ function getAllowedGroups(userId) {
 
 function getTableUser() {
   addCurrentFuncToTrace()
-  const sheet = ssApp.getSheetByName('ПОЛЬЗОВАТЕЛИ')
+  const sheet = ss.getSheetByName('ПОЛЬЗОВАТЕЛИ')
   const range = sheet.getRange(3, 1, 50, 32)
   return range.getValues()
 }
@@ -228,7 +324,7 @@ function getNewPaintNameInlineResults(query) {
 
 function getTableNewPaint() {
   addCurrentFuncToTrace()
-  const sheet = ssApp.getSheetByName('КРАСКА')
+  const sheet = ss.getSheetByName('КРАСКА')
   const range = sheet.getRange(43, 1, 5000, 6)
   const result = range.getValues()
   return result
@@ -406,6 +502,7 @@ function storeMenuMessage(messageId, text, keyboard) {
 
 function switchMenu(act=null) {
   addCurrentFuncToTrace()
+  let text = null
   const action = act || user.callback_query.data.replace('Меню ', '')
   switch (action.split(' ')[0]) {
     case 'Списание':
@@ -414,6 +511,7 @@ function switchMenu(act=null) {
       user.menuSection = 'AddMenu'; break
     case 'Регистрация': {
       user.menuSection = 'RegistrationMenu'
+      cacheRegistrationTables()
       showRegistrationMenu()
       return
     }
@@ -422,10 +520,100 @@ function switchMenu(act=null) {
     case 'Назад':
       user.writeOff.selectedGroup = null; break
     case 'НазадГлавное':
-      user.menuSection = null; break
+      user.menuSection = null
+      text = `Привет, ${user.name}! Выбери секцию:`
+      break
   }
   saveUser()
   const keyboard = {inline_keyboard: createButtons()}
+  editMenuMessage(text, keyboard)
+}
+
+function saveUser() {
+  props.setProperty(`User ${user.id}`, JSON.stringify(user))
+}
+
+function cacheRegistrationTables() {
+  addCurrentFuncToTrace()
+  const ss = SpreadsheetApp.openById(ssIdColSdelkaDetWorks)
+  const sheetD = ss.getSheetByName('Детали')
+  const rangeDetails = sheetD.getRange(2, 1, sheetD.getMaxRows(), 4)
+  const sheetW = ss.getSheetByName('Работы')
+  const rangeWorks = sheetW.getRange(2, 1, sheetW.getMaxRows(), 3)
+  cachedTables = {
+    details: rangeDetails.getValues(),
+    works: rangeWorks.getValues()
+  }
+  props.setProperty('cachedTables', JSON.stringify(cachedTables))
+}
+
+function getCachedTables() {
+  return cachedTables || JSON.parse(props.getProperty('cachedTables'))
+}
+
+function showRegistrationMenu() {
+  addCurrentFuncToTrace()
+  const text = `Для регистрации деталей заполни форму:
+Вид работ: ${user.reg.workType || '-'}
+Работа: ${user.reg.work || '-'}
+№ заказа: ${user.reg.orderNum || '-'}
+№ детали: ${user.reg.detailNum || '-'}
+Количество деталей: ${user.reg.quantity || '-'}`
+  const keyboard = {inline_keyboard: createButtonsRegistrationMenu()}
+  editMenuMessage(text, keyboard)
+}
+
+function createButtonsRegistrationMenu() {
+  addCurrentFuncToTrace()
+  let maxCall = 'pass'
+  let maxText = ' '
+  let minCall = 'pass'
+  let minText = ' '
+  let manualText = ' '
+  let confirmCall = 'pass'
+  let confirmText = '(Поля не заполнены)'
+  if (user.reg.orderNum && user.reg.detailNum){
+    const selectedDetail = getTablesRegistration('details').filter(d =>
+      d.orNum.toString() === user.reg.orderNum &&
+      d.detNum.toString() === user.reg.detailNum)[0]
+    if (selectedDetail){
+      if (selectedDetail.quantity > 1){
+        maxCall = `Registration Set quantity ${selectedDetail.quantity}`
+        maxText = `Все ${selectedDetail.quantity} шт.`
+        minCall = `Registration Set quantity ${1}`
+        minText = '1 шт.'
+        manualText = '(либо введи)'
+      }
+      if (selectedDetail.quantity === 1){
+        minCall = `Registration Set quantity ${1}`
+        minText = 'Всего 1 шт.'
+      }
+
+    }
+  }
+  if (
+    user.reg.workType &&
+    user.reg.work &&
+    user.reg.orderNum &&
+    user.reg.detailNum &&
+    user.reg.quantity
+  ) {
+    confirmCall = 'Registration Apply'
+    confirmText = 'Зарегистрировать ✓'
+  }
+  return [
+      [{"text": "Фрезеровка",         'callback_data': `Registration Set workType Фрезеровка`},
+       {"text": "Прямые",             'callback_data': `Registration Set workType Прямые`},
+       {"text": "Шпон/стол.",         'callback_data': `Registration Set workType Шпон/стол.`}],
+      [{"text": "Выбрать работу",     'switch_inline_query_current_chat': 'ShowWorks '}],
+      [{"text": "Выбрать № заказа",   'switch_inline_query_current_chat': 'ShowOrderNums '}],
+      [{"text": "Выбрать № детали",   'switch_inline_query_current_chat': 'ShowDetailNums '}],
+      [{"text": maxText,              'callback_data': maxCall},
+       {"text": minText,              'callback_data': minCall},
+       {"text": manualText,           'callback_data': `pass` }],
+      [{"text": `Назад`,              'callback_data': `Меню НазадГлавное`},
+       {"text": confirmText,          'callback_data': confirmCall}]
+  ]
 }
 
 function createButtons() {
@@ -554,11 +742,11 @@ function createButtonsAddMenu() {
 
 function createButtonsMainMenu() {
   addCurrentFuncToTrace()
-  const buttons = [
-    [{"text": `➖Списание`, 'callback_data': `Меню Списание`}],
-    [{"text": `➕Добавление`, 'callback_data': `Меню Добавление`}],
+  return [
+    [{"text": `➖Списание материалов`, 'callback_data': `Меню Списание`}],
+    [{"text": `➕Добавление материалов`, 'callback_data': `Меню Добавление`}],
+    [{"text": `💲Регистрация деталей`, 'callback_data': `Меню Регистрация`}],
   ]
-  return buttons
 }
 
 function updateTrioMenu() {
@@ -610,7 +798,6 @@ function createButtonsTrioMenu() {
         { "text": `${shelfName}${isShelfMark}`, 'callback_data': `ТройноеМеню Полка ${shelfName}`},
       ])
   }
-  // if (uA.supplier && uA.rack && uA.shelf && uA.order) {
   if (uA.supplier && uA.rack && uA.shelf) {
     buttonRows.push([
         {"text": `Назад`, 'callback_data': `Меню Добавление`},
@@ -643,12 +830,13 @@ function makeAddition() {
 function tableNewPaintAppend(){
   addCurrentFuncToTrace()
   const data = [[].slice.call(arguments)]
-  setValuesUnderLastRow('СКЛАД', 4, data)
+  setValuesUnderLastRow(null, 'СКЛАД', 4, data)
 }
 
-function setValuesUnderLastRow(sheetName, column, twoDimensionalArray){
+function setValuesUnderLastRow(ssId=null, sheetName, column, twoDimensionalArray){
   addCurrentFuncToTrace()
-  const sheet = ssApp.getSheetByName(sheetName)
+  const customSs = ssId ? SpreadsheetApp.openById(ssId) : null
+  const sheet = (ssId ? customSs : ss).getSheetByName(sheetName)
   const curRange = sheet.getRange(sheet.getMaxRows(), column)
   const row = curRange.getNextDataCell(SpreadsheetApp.Direction.UP).getLastRow() + 1
   const col = curRange.getLastColumn()
@@ -673,6 +861,42 @@ function editMenuMessage(textNew=null, keyboardNew=null) {
   if (isKbIdentical && (textOld === textNew || !textNew)) return
   editMessage(user.id, messageId, textNew || textOld, keyboardNew)
   storeMenuMessage(messageId, textNew || textOld, keyboardNew)
+}
+
+function processRegistration() {
+  addCurrentFuncToTrace()
+  const action = user.callback_query ? user.callback_query.data.replace('Registration ', '')
+                                     : user.message.text.replace('Registration ', '')
+  const [operation, attrName, ...values] = action.split(' ')
+  switch (operation) {
+    case 'Set':
+      user.reg[attrName] = values.join(' '); break
+    case 'Apply':
+      applyRegistration(); return
+  }
+  saveUser()
+  if (user.message) deleteLastMessage()
+  showRegistrationMenu()
+}
+
+function applyRegistration() {
+  addCurrentFuncToTrace()
+  const uR = user.reg
+  const date = toDate(user.callback_query.message.date)
+  tableRegistrationAppend(date, user.id, uR.workType, uR.work,  uR.orderNum,  uR.detailNum, uR.quantity)
+  const text = user.menuMessage.text.replace('Для регистрации деталей заполни форму',
+                                             '👌 Зарегистрировано')
+  user.reg = {}
+  user.menuSection = null
+  saveUser()
+  editMenuMessage(text)
+  greetUser()
+}
+
+function tableRegistrationAppend(){
+  addCurrentFuncToTrace()
+  const data = [[].slice.call(arguments)]
+  setValuesUnderLastRow(ssIdColSdelkaDetWorks, 'ЖУРНАЛ РАБОТ', 2, data)
 }
 
 function setSection() {
@@ -700,7 +924,7 @@ function greetUser() {
   addCurrentFuncToTrace()
   let text
   if (isUserAuthorized()) {
-    text = `Привет, ${user.name}! Давай найдём материал:`
+    text = `Привет, ${user.name}! Выбери секцию:`
   } else {
     text = `Привет, ${user.name}! Это демо-режим бота, т.к. твой id ${user.id} не зарегистрирован – действия не будут учтены в таблице. \nОбратись к администратору, чтобы тебя подключили к системе или давай продолжим так и просто потестим бота`
   }
@@ -899,7 +1123,7 @@ function now(date=0){
 
 function tableAppend(){
   addCurrentFuncToTrace()
-  const sheet = ssApp.getSheetByName('ЖУРНАЛ_ИСХОДНИК')
+  const sheet = ss.getSheetByName('ЖУРНАЛ_ИСХОДНИК')
   sheet.appendRow([].slice.call(arguments))
 }
 
