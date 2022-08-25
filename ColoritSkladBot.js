@@ -560,7 +560,7 @@ function getCachedTables() {
 
 function showRegistrationMenu() {
   addCurrentFuncToTrace()
-  const text = `Для регистрации деталей заполни форму:
+  const text = `Для отчёта о работе заполни форму:
 Вид работ: ${user.reg.workType || '-'}
 Работа: ${user.reg.work || '-'}
 № заказа: ${user.reg.orderNum || '-'}
@@ -599,10 +599,14 @@ function createButtonsRegistrationMenu() {
     }
   }
   if (
-    1
+    user.reg.workType &&
+    user.reg.work &&
+    user.reg.orderNum &&
+    user.reg.detailNum &&
+    user.reg.quantity
   ) {
     confirmCall = 'Registration Apply'
-    confirmText = 'Зарегистрировать ✓'
+    confirmText = 'Готово ✓'
   }
   return [
       [{"text": "Фрезеровка",         'callback_data': `Registration Set workType Фрезеровка`},
@@ -748,7 +752,7 @@ function createButtonsMainMenu() {
   return [
     [{"text": `➖Списание материалов`, 'callback_data': `Меню Списание`}],
     [{"text": `➕Добавление материалов`, 'callback_data': `Меню Добавление`}],
-    [{"text": `💲Регистрация деталей`, 'callback_data': `Меню Регистрация`}],
+    [{"text": `💲Отчёт о работе`, 'callback_data': `Меню Регистрация`}],
   ]
 }
 
@@ -886,8 +890,8 @@ function applyRegistration() {
   const uR = user.reg
   const date = toDate(user.callback_query.message.date)
   tableRegistrationAppend(date, user.id, uR.workType, uR.work,  uR.orderNum,  uR.detailNum, uR.quantity)
-  const text = user.menuMessage.text.replace('Для регистрации деталей заполни форму',
-                                             '👌 Зарегистрировано')
+  const text = user.menuMessage.text.replace('Для отчёта о работе заполни форму',
+                                             '👌 Отчёт о работе принят')
   user.reg = {}
   user.menuSection = null
   saveUser()
@@ -1142,13 +1146,11 @@ function pass(){console.log(123)}
 function ClearCache(){props.deleteAllProperties()}
 
 function setMyCommands(){
-  const map = Array.prototype.map;
   const botCommands = [
-    // {command: command, description: description},
     {command: 'section_0', description: 'Главное меню'},
-    {command: 'section_1', description: 'Секция 1: Списание материалов'},
-    {command: 'section_2', description: 'Секция 2: Добавление материалов'},
-    {command: 'section_3', description: 'Секция 2: Регистрация деталей'},
+    {command: 'section_1', description: '1: Списание со склада'},
+    {command: 'section_2', description: '2: Добавление на склад'},
+    {command: 'section_3', description: '3: Отчет о работе'},
   ]
   let data = {
     method: 'post',
