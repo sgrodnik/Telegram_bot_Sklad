@@ -38,9 +38,8 @@ function createOrFetchUser() {
     writeOff: Object(),
     addition: Object(),
     reg: Object(),
-    // messages: []
+    messages: []
   }
-  user.messages = []
   user.id = param.from.id
   user.name = param.from.first_name || param.from.username || param.from.last_name
   user.message = update.message
@@ -1097,7 +1096,7 @@ function machinize(s) {
 
 function storeMessageId(messageId=null) {
   addCurrentFuncToTrace()
-  user.messages.push(messageId || user.message.message_id)
+  user.messages.push({id: messageId || user.message.message_id, date: user.lastVisit})
   saveUser()
 }
 
@@ -1265,4 +1264,35 @@ function setMyCommands(){
   }
   let response = UrlFetchApp.fetch(base, data)
   Logger.log(JSON.parse(response.getContentText()))
+}
+
+function regularSelfCleaning() {
+  const data = props.getProperties();
+  for (const key in data) {
+    if (!key.includes('User ')) continue
+    user = JSON.parse(data[key])
+    const res = []
+    for (const message of user.messages) {
+      const now = new Date()
+      const messageDate = new Date(message.date)
+      const hoursPassed = Math.abs(now - messageDate) / 36e5
+      if (hoursPassed > 46){
+        deleteMessage(user.id, message.id)
+        const logObject = {
+          userId: user.id,
+          userName: user.name,
+          now, messageDate, hoursPassed
+        }
+        res.push('delete message ' + JSON.stringify(logObject))
+      }
+      // console.log(user.name, '\n', now, '\n', messageDate, '\n', (now - messageDate) / 1000, hoursPassed)
+    }
+    if (res.length > 0){
+      printToSG(res.join('\n'))
+      user.messages = []
+      user.menuMessage = null
+      saveUser()
+    }
+
+  }
 }
