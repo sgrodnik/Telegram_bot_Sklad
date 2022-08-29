@@ -9,6 +9,7 @@ let update
 let user
 let cachedTables
 const cachedSss = {}
+let printToSGCounter = 0
 
 
 const DEBUG = 0
@@ -37,8 +38,9 @@ function createOrFetchUser() {
     writeOff: Object(),
     addition: Object(),
     reg: Object(),
-    messages: []
+    // messages: []
   }
+  user.messages = []
   user.id = param.from.id
   user.name = param.from.first_name || param.from.username || param.from.last_name
   user.message = update.message
@@ -96,56 +98,79 @@ function getRegistrationInlineResults(query) {
   addCurrentFuncToTrace()
   let results = []
   let counter = 0
-  if (query.startsWith('ShowWorks')) {
-    query = query.replace('ShowWorks', '').trim()
-    const works = getTablesRegistration('works')
-    for (const work of works) {
-      counter++
-      if (query && !work.toLowerCase().includes(query.toLowerCase())) continue
-      results.push({
-        id: counter.toString(),
-        type: 'article',
-        title: `${work.type}: ${work.work}`,
-        input_message_content: {
-          message_text: 'Registration Set workId ' + work.id
-        }
-      })
-    }
-  }
+  const catalog = getCachedTables().catalogOrders
+
   if (query.startsWith('ShowOrderNums')) {
     query = query.replace('ShowOrderNums', '').trim()
-    const details = getTablesRegistration('details')
-    const unique = []
-    for (const detail of details) {
-      if (unique.includes(detail.orNum)) continue
-      unique.push(detail.orNum)
+    for (const order in catalog) {
+      if (isQueryAndIsNotIncludedIn(query, order)) continue
       counter++
-      if (query && !detail.orNum.toLowerCase().includes(query.toLowerCase())) continue
       results.push({
         id: counter.toString(),
         type: 'article',
-        title: `Заказ № ${detail.orNum}`,
+        title: `Заказ № ${order}`,
         input_message_content: {
-          message_text: 'Registration Set orderNum ' + detail.orNum
+          message_text: 'Registration Set orderNum ' + order
         }
       })
     }
   }
+
+  function isQueryAndIsNotIncludedIn(query, entity){
+    const isNotQueryIncluded =
+      !entity.toLowerCase().includes(query.toLowerCase());
+    return query && isNotQueryIncluded
+  }
+
+  if (query.startsWith('ShowWorks')) {
+    query = query.replace('ShowWorks', '').trim()
+    const uniqueWorks = []
+    for (const orderNum in catalog) {
+      if (orderNum !== user.reg.orderNum) continue
+      const details = catalog[orderNum]
+      for (const detailNum in details) {
+        const works = details[detailNum]
+        for (const workId in works) {
+            const work = getCachedTables().catalogWorks[workId]
+          if (isQueryAndIsNotIncludedIn(query, work.workStr)) continue
+          if (uniqueWorks.includes(workId)) continue
+          uniqueWorks.push(workId)
+          counter++
+          results.push({
+            id: counter.toString(),
+            type: 'article',
+            title: `${work.work}`,
+            description: `${work.workType}, Заказ ${orderNum}`,
+            input_message_content:
+              {message_text: 'Registration Set workId ' + workId}
+          })
+        }
+      }
+    }
+  }
+
   if (query.startsWith('ShowDetailNums')) {
     query = query.replace('ShowDetailNums', '').trim()
-    const details = getTablesRegistration('details')
-    for (const detail of details) {
-      if (user.reg.orderNum !== detail.orNum) continue
-      counter++
-      if (query && !detail.detNum.toLowerCase().includes(query.toLowerCase())) continue
-      results.push({
-        id: counter.toString(),
-        type: 'article',
-        title: `Деталь ${detail.detNum}: ${detail.size} - ${detail.quantity} шт.`,
-        input_message_content: {
-          message_text: 'Registration Set detailNum ' + detail.detNum
+    for (const orderNum in catalog) {
+      if (user.reg.orderNum !== orderNum) continue
+      const details = catalog[orderNum]
+      for (const detailNum in details) {
+        const works = details[detailNum]
+        for (const workId in works) {
+          const quantity = works[workId]
+          if (user.reg.workId !== workId) continue
+          if (isQueryAndIsNotIncludedIn(query, detailNum)) continue
+          counter++
+          results.push({
+            id: counter.toString(),
+            type: 'article',
+            title: `Деталь ${detailNum}: ${quantity} шт.`,
+            input_message_content: {
+              message_text: 'Registration Set detailNum ' + detailNum
+            }
+          })
         }
-      })
+      }
     }
   }
 
@@ -483,7 +508,12 @@ function deleteMessage(chatId, messageId){
     },
     // muteHttpExceptions: true
   }
-  let response = UrlFetchApp.fetch(base, data)
+  try {
+    UrlFetchApp.fetch(base, data)
+  } catch (err) {
+    const text = `${err}\n\nUser: ${JSON.stringify(user, null, 4)}}`
+    printToSG(text)
+  }
 }
 
 function editPrevReport(chatId) {
@@ -542,34 +572,73 @@ function saveUser() {
 function cacheRegistrationTables() {
   addCurrentFuncToTrace()
   const ss = getSs(ssIdColSdelkaDetWorks)
-  const sheetD = ss.getSheetByName('Детали')
-  const rangeDetails = sheetD.getRange(2, 1, sheetD.getMaxRows(), 4)
-  const sheetW = ss.getSheetByName('Работы')
-  const rangeWorks = sheetW.getRange(2, 1, sheetW.getMaxRows(), 4)
-  cachedTables = {
-    details: rangeDetails.getValues(),
-    works: rangeWorks.getValues()
+  const sheet = ss.getSheetByName('Матрица детали/работы')
+  const redundantColNumber = 1
+  const numColumns = sheet.getMaxColumns() - redundantColNumber;
+  const rangeDetails = sheet.getRange(1, 1, sheet.getMaxRows(), numColumns)
+  const catalogOrders = {}
+  const catalogWorks = {}
+  const rangeValues = rangeDetails.getValues()
+  const works = rangeValues.slice(0, 3)
+  for (const row of rangeValues.slice(4)) {
+    const orderNum = row[0]
+    const detailNum = row[1]
+    if (!orderNum) continue
+    for (let i = 4; i < numColumns; i++) { // todo проверить последний столбец
+      const quantity = row[i]
+      if (quantity <= 0) continue
+      const workStr = `${i}::${works[0][i]}::${works[2][i]}`
+      const workId = `${i}`
+      catalogWorks[i] = {workType: works[0][i], work: works[2][i], workStr: workStr}
+      if (!(orderNum in catalogOrders)) catalogOrders[orderNum] = {}
+      if (!(detailNum in catalogOrders[orderNum]))
+        catalogOrders[orderNum][detailNum] = {}
+      catalogOrders[orderNum][detailNum][workId] = quantity
+    }
   }
-  props.setProperty('cachedTables', JSON.stringify(cachedTables))
+  cachedTables = {
+    catalogOrders: catalogOrders,
+    catalogWorks: catalogWorks
+  }
+  saveCachedTables(cachedTables)
 }
 
 function getCachedTables() {
   return cachedTables || JSON.parse(props.getProperty('cachedTables'))
 }
 
-function showRegistrationMenu() {
+function saveCachedTables(obj) {
   addCurrentFuncToTrace()
-  const theWork = getTablesRegistration('works').filter(w=>w.id.toString() === user.reg.workId)[0]
-  user.reg.workType = theWork ? theWork.type : null
-  user.reg.work = theWork ? theWork.work : null
+  const s = JSON.stringify(obj);
+  // printToSG('cache size: ' + getSizeInKb(s))
+  props.setProperty('cachedTables', s)
+}
+
+function getSizeInKb(string) {
+  let size = (encodeURI(string).split(/%..|./).length - 1) / 1024;
+  size = Math.round(size * 10) / 10
+  return size + ' Kb';
+}
+
+function showRegistrationMenu(freshly=null) {
+  addCurrentFuncToTrace()
+  if (user.reg.workId){
+    const theWork = getCachedTables().catalogWorks[user.reg.workId]
+    user.reg.workType = theWork ? theWork.workType : null
+    user.reg.work = theWork ? theWork.work : null
+  }
   const text = `Для отчёта о работе заполни форму:
+№ заказа: ${user.reg.orderNum || '-'}
 Вид работ: ${user.reg.workType || '-'}
 Работа: ${user.reg.work || '-'}
-№ заказа: ${user.reg.orderNum || '-'}
 № детали: ${user.reg.detailNum || '-'}
 Количество деталей: ${user.reg.quantity || '-'}`
   const keyboard = {inline_keyboard: createButtonsRegistrationMenu()}
-  editMenuMessage(text, keyboard)
+  if (user.menuMessage) editMenuMessage(text, keyboard)
+  else {
+    let [_, messageId] = sendMessageToUser(text, keyboard)
+    storeMenuMessage(messageId, text, keyboard)
+  }
 }
 
 function createButtonsRegistrationMenu() {
@@ -581,24 +650,21 @@ function createButtonsRegistrationMenu() {
   let manualText = ' '
   let confirmCall = 'pass'
   let confirmText = '(Поля не заполнены)'
-  if (user.reg.orderNum && user.reg.detailNum){
-    const selectedDetail = getTablesRegistration('details').filter(d =>
-      d.orNum.toString() === user.reg.orderNum &&
-      d.detNum.toString() === user.reg.detailNum)[0]
-    if (selectedDetail){
-      if (selectedDetail.quantity > 1){
-        maxCall = `Registration Set quantity ${selectedDetail.quantity}`
-        maxText = `Все ${selectedDetail.quantity} шт.`
-        minCall = `Registration Set quantity ${1}`
-        minText = '1 шт.'
-        manualText = '(либо введи)'
-      }
-      if (selectedDetail.quantity === 1){
-        minCall = `Registration Set quantity ${1}`
-        minText = 'Всего 1 шт.'
-      }
-
+  if (user.reg.detailNum){
+    const quantity = getCachedTables()
+      .catalogOrders[user.reg.orderNum][user.reg.detailNum][user.reg.workId]
+    if (quantity > 1){
+      maxCall = `Registration Set quantity ${quantity}`
+      maxText = `Все ${quantity} шт.`
+      minCall = `Registration Set quantity ${1}`
+      minText = '1 шт.'
+      manualText = '(либо введи)'
     }
+    if (quantity === 1){
+      minCall = `Registration Set quantity ${1}`
+      minText = 'Всего 1 шт.'
+    }
+
   }
   if (
     user.reg.workId &&
@@ -611,8 +677,8 @@ function createButtonsRegistrationMenu() {
   }
   return [
       [{"text": "Выбрать № заказа",   'switch_inline_query_current_chat': 'ShowOrderNums '}],
-      [{"text": "Выбрать № детали",   'switch_inline_query_current_chat': 'ShowDetailNums '}],
       [{"text": "Выбрать работу",     'switch_inline_query_current_chat': 'ShowWorks '}],
+      [{"text": "Выбрать № детали",   'switch_inline_query_current_chat': 'ShowDetailNums '}],
       [{"text": maxText,              'callback_data': maxCall},
        {"text": minText,              'callback_data': minCall},
        {"text": manualText,           'callback_data': `pass` }],
@@ -860,11 +926,24 @@ function getEmployeeName(userId) {
 
 function editMenuMessage(textNew=null, keyboardNew=null) {
   addCurrentFuncToTrace()
+  if (!user.menuMessage) {
+    greetUser()
+    return;
+  }
   const [messageId, textOld, keyboardOld] = Object.values(user.menuMessage)
   const isKbIdentical = JSON.stringify(keyboardOld) === JSON.stringify(keyboardNew)
   if (isKbIdentical && (textOld === textNew || !textNew)) return
   editMessage(user.id, messageId, textNew || textOld, keyboardNew)
   storeMenuMessage(messageId, textNew || textOld, keyboardNew)
+}
+
+function editAndForgetMenuMessage(textNew=null, keyboardNew=null) {
+  addCurrentFuncToTrace()
+  const [messageId, textOld, keyboardOld] = Object.values(user.menuMessage)
+  const isKbIdentical = JSON.stringify(keyboardOld) === JSON.stringify(keyboardNew)
+  if (isKbIdentical && (textOld === textNew || !textNew)) return
+  editMessage(user.id, messageId, textNew || textOld, keyboardNew)
+  user.menuMessage = null
 }
 
 function processRegistration() {
@@ -886,15 +965,22 @@ function processRegistration() {
 function applyRegistration() {
   addCurrentFuncToTrace()
   const uR = user.reg
-  const date = toDate(user.callback_query.message.date)
   tableRegistrationAppend(user.lastVisit, user.id, uR.workType, uR.work,  uR.orderNum,  uR.detailNum, uR.quantity)
   const text = user.menuMessage.text.replace('Для отчёта о работе заполни форму',
                                              '👌 Отчёт о работе принят')
-  user.reg = {}
-  user.menuSection = null
+  const cachedTables1 = getCachedTables();
+  const detail = cachedTables1.catalogOrders[uR.orderNum][uR.detailNum];
+  detail[uR.workId] -= uR.quantity
+  cachedTables1.catalogOrders[uR.orderNum][uR.detailNum] = detail
+  saveCachedTables(cachedTables1)
+
+
+  user.reg.quantity = null
+  user.reg.detailNum = null
   saveUser()
-  editMenuMessage(text)
-  greetUser()
+
+  editAndForgetMenuMessage(text)
+  showRegistrationMenu()
 }
 
 function tableRegistrationAppend(){
@@ -1117,6 +1203,13 @@ function sendIncorrectInputAnimation(chatId, caption=''){
 
 function printToSG(text) {
   sendMessageToSG(text)
+}
+
+function printToSGOnce(text) {
+  if (printToSGCounter === 0){
+    printToSGCounter++
+    printToSG(text)
+  }
 }
 
 function now(date=0){
