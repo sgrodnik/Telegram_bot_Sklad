@@ -158,6 +158,7 @@ function getRegistrationInlineResults(query) {
         const works = details[detailNum]
         for (const workId in works) {
           const quantity = works[workId]
+          if (quantity <= 0) continue
           if (user.reg.workId !== workId) continue
           if (isQueryAndIsNotIncludedIn(query, detailNum)) continue
           counter++
@@ -650,8 +651,9 @@ function createButtonsRegistrationMenu() {
   let manualText = ' '
   let confirmCall = 'pass'
   let confirmText = '(Поля не заполнены)'
+  let quantity
   if (user.reg.detailNum){
-    const quantity = getCachedTables()
+    quantity = getCachedTables()
       .catalogOrders[user.reg.orderNum][user.reg.detailNum][user.reg.workId]
     if (quantity > 1){
       maxCall = `Registration Set quantity ${quantity}`
@@ -675,15 +677,26 @@ function createButtonsRegistrationMenu() {
     confirmCall = 'Registration Apply'
     confirmText = 'Готово ✓'
   }
+
+  const btnOrderNum = {text: 'Выбрать № заказа'}
+  if (user.reg.orderNum) btnOrderNum.text = `Выбран заказ ${user.reg.orderNum}`
+
+  const btnWork = {text: 'Выбрать работу'}
+  if (user.reg.workId) btnWork.text = `${user.reg.workType}: ${user.reg.work}`
+
+  const btnDetailNum = {text: 'Выбрать № детали'}
+  if (user.reg.detailNum) btnDetailNum.text =
+    `Выбрана деталь № ${user.reg.detailNum} (остаток ${quantity} шт.)`
+
   return [
-      [{"text": "Выбрать № заказа",   'switch_inline_query_current_chat': 'ShowOrderNums '}],
-      [{"text": "Выбрать работу",     'switch_inline_query_current_chat': 'ShowWorks '}],
-      [{"text": "Выбрать № детали",   'switch_inline_query_current_chat': 'ShowDetailNums '}],
-      [{"text": maxText,              'callback_data': maxCall},
-       {"text": minText,              'callback_data': minCall},
-       {"text": manualText,           'callback_data': `pass` }],
-      [{"text": `Назад`,              'callback_data': `Меню НазадГлавное`},
-       {"text": confirmText,          'callback_data': confirmCall}]
+      [{text: btnOrderNum.text,  switch_inline_query_current_chat: 'ShowOrderNums '}],
+      [{text: btnWork.text,      switch_inline_query_current_chat: 'ShowWorks '}],
+      [{text: btnDetailNum.text, switch_inline_query_current_chat: 'ShowDetailNums '}],
+      [{text: maxText,           callback_data: maxCall},
+       {text: minText,           callback_data: minCall},
+       {text: manualText,        callback_data: `pass` }],
+      [{text: `Назад`,           callback_data: `Меню НазадГлавное`},
+       {text: confirmText,       callback_data: confirmCall}]
   ]
 }
 
