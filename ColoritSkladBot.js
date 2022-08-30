@@ -10,6 +10,9 @@ let user
 let cachedTables
 const cachedSss = {}
 let printToSGCounter = 0
+const sections = {writeOff: 1,
+                  addition: 2,
+                  registration: 3}
 
 
 const DEBUG = 0
@@ -47,6 +50,35 @@ function createOrFetchUser() {
   user.callback_query = update.callback_query
   user.lastVisit = new Date()
   user.debug = {functions: [arguments.callee.name]}
+  user.rights = getRigths()
+}
+
+function getRigths() {
+  addCurrentFuncToTrace()
+  const table = getTableUserRights()
+  const titles = table[2]
+  const writeOff = {any: false}
+  const addition = {any: false}
+  const registration = {any: false}
+  for (const row of table) {
+    if (user.id !== row[0]) continue
+    for (let i = 2; i < 11; i++) {
+      const flag = row[i]
+      writeOff[titles[i]] = flag
+      if (flag) writeOff.any = true
+    }
+    for (let i = 14; i < 15; i++) {
+      const flag = row[i]
+      addition[titles[i]] = flag
+      if (flag) addition.any = true
+    }
+    for (let i = 15; i < 18; i++) {
+      const flag = row[i]
+      registration[titles[i]] = flag
+      if (flag) registration.any = true
+    }
+  }
+  return {writeOff, addition, registration}
 }
 
 function addCurrentFuncToTrace() {
@@ -328,6 +360,13 @@ function getTableUser() {
   return range.getValues()
 }
 
+function getTableUserRights() {
+  addCurrentFuncToTrace()
+  const sheet = getSs(ssIdSpisanieColorit).getSheetByName('ПОЛЬЗОВАТЕЛИ')
+  const range = sheet.getDataRange()
+  return range.getValues()
+}
+
 function getNewPaintNameInlineResults(query) {
   addCurrentFuncToTrace()
   let results = []
@@ -542,15 +581,18 @@ function switchMenu(act=null) {
   const action = act || user.callback_query.data.replace('Меню ', '')
   switch (action.split(' ')[0]) {
     case 'Списание':
-      user.menuSection = 'WriteOffMenu'; break
+      if (user.rights.writeOff.any) user.menuSection = 'WriteOffMenu'
+      break
     case 'Добавление':
-      user.menuSection = 'AddMenu'; break
-    case 'Регистрация': {
-      user.menuSection = 'RegistrationMenu'
-      cacheRegistrationTables()
-      showRegistrationMenu()
+      if (user.rights.addition.any) user.menuSection = 'AddMenu'
+      break
+    case 'Регистрация':
+      if (user.rights.registration.any) {
+        user.menuSection = 'RegistrationMenu'
+        cacheRegistrationTables()
+        showRegistrationMenu()
+      }
       return
-    }
     case 'Показать':
       user.writeOff.selectedGroup = action.replace('Показать ', ''); break
     case 'Назад':
@@ -825,11 +867,24 @@ function createButtonsAddMenu() {
 
 function createButtonsMainMenu() {
   addCurrentFuncToTrace()
-  return [
-    [{"text": `➖Списание со склада`, 'callback_data': `Меню Списание`}],
-    [{"text": `➕Добавление на склад`, 'callback_data': `Меню Добавление`}],
-    [{"text": `💲Отчёт о работе`, 'callback_data': `Меню Регистрация`}],
-  ]
+  const buttons = []
+  if (isDemoOrUserEntitledTo(sections.writeOff)) buttons.push(
+    [{"text": `➖Списание со склада`, 'callback_data': `Меню Списание`}]
+  )
+  if (isDemoOrUserEntitledTo(sections.addition)) buttons.push(
+    [{"text": `➕Добавление на склад`, 'callback_data': `Меню Добавление`}]
+  )
+  if (isDemoOrUserEntitledTo(sections.registration)) buttons.push(
+    [{"text": `💲Отчёт о работе`, 'callback_data': `Меню Регистрация`}]
+  )
+  return buttons
+}
+
+function isDemoOrUserEntitledTo(section) {
+  if (!isUserAuthorized()) return true
+  if (section === sections.writeOff) return user.rights.writeOff.any
+  if (section === sections.addition) return user.rights.addition.any
+  if (section === sections.registration) return user.rights.registration.any
 }
 
 function updateTrioMenu() {
