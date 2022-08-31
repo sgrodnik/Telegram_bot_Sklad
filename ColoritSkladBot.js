@@ -1408,18 +1408,28 @@ function regularSelfCleaning() {
       if (hoursPassed > 46){
         deleteMessage(user.id, message.id)
         const logObject = {
+          messageId: message.id,
           userId: user.id,
           userName: user.name,
           now, messageDate, hoursPassed
         }
         res.push('delete message ' + JSON.stringify(logObject))
       }
-      // console.log(user.name, '\n', now, '\n', messageDate, '\n', (now - messageDate) / 1000, hoursPassed)
+      Logger.log(user.name, '\n', now, '\n', messageDate, '\n',
+        (now - messageDate) / 1000, hoursPassed)
     }
     if (res.length > 0){
       printToSG(res.join('\n'))
-      user.messages = []
-      user.menuMessage = null
+      const newMessages = []
+      for (const message of user.messages) {
+        const isMessageDeleted = res.map(o=>o.messageId).includes(message.id);
+        if (isMessageDeleted) continue
+        newMessages.push(message)
+      }
+      user.messages = newMessages
+      const isMenuMessageDeleted =
+        res.map(o=>o.messageId).includes(user.menuMessage.id);
+      if (isMenuMessageDeleted) user.menuMessage = null
       saveUser()
     }
 
