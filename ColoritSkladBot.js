@@ -21,15 +21,38 @@ const DEBUG = 0
 function doPost(e){
   try{
     update = JSON.parse(e.postData.contents)
+    log('updateLog', e.postData.contents)
     createOrFetchUser()
     processUpdate()
   }
   catch(err){
-    const text = `${err}\n\nUser: ${JSON.stringify(user, null, 4)}}`
-    printToSG(text)
+    // const text = `${err}\n\nUser: ${JSON.stringify(user, null, 4)}`
+    const text = `Ошибка ${err}`
+    printToSG(`Ошибка ${err}, подробности в логе`)
+    log('errorLog', `${err}\nUser: ${JSON.stringify(user)}`)
     // tableAppend(now(), 'Ошибка', text)
   }
 }
+
+function log(logName, text) {
+  const MAX_LOG_LENGTH = 100
+  const updateLog = JSON.parse(props.getProperty(logName)) || []
+  updateLog.push(`${new Date()}: ${text}`)
+  if (updateLog.length > MAX_LOG_LENGTH) updateLog.shift()
+  props.setProperty(logName, JSON.stringify(updateLog))
+}
+
+function printLog(logName) {
+  const str = props.getProperty(logName);
+  const updateLog = JSON.parse(str) || []
+  for (const item of updateLog) {
+    console.log(item)
+  }
+  console.log(`${logName} size is ${getSizeInKb(str)}, it contains ${updateLog.length} items`)
+}
+
+function printUpdateLog(){ printLog('updateLog') }
+function printErrorLog(){ printLog('errorLog') }
 
 function createOrFetchUser() {
   const paramName = update.message ? 'message'
