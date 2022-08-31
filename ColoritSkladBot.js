@@ -10,6 +10,7 @@ let user
 let cachedTables
 const cachedSss = {}
 let printToSGCounter = 0
+let printToSGValues= []
 const sections = {writeOff: 1,
                   addition: 2,
                   registration: 3}
@@ -35,7 +36,7 @@ function createOrFetchUser() {
                   : update.inline_query ? 'inline_query'
                   : update.callback_query ? 'callback_query'
                   : null
-  if (!paramName) throw 'Unexpected incoming kind received'
+  if (!paramName) throw `Unexpected incoming paramName received: ${paramName}, id ${update[paramName] ? update[paramName].from ? update[paramName].from.id : '?' : '??'}`
   const param = update[paramName]
   user = JSON.parse(props.getProperty(`User ${param.from.id}`)) || {
     writeOff: Object(),
@@ -127,7 +128,7 @@ function processInlineQuery(){
 
 function getRegistrationInlineResults(query) {
   addCurrentFuncToTrace()
-  let results = []
+  const results = []
   let counter = 0
   const catalog = getCachedTables().catalogOrders
 
@@ -172,6 +173,7 @@ function getRegistrationInlineResults(query) {
             type: 'article',
             title: `${work.work}`,
             description: `${work.workType}, Заказ ${orderNum}`,
+            // description: `${counter}), id${workId}, ${work.workType}, Заказ ${orderNum}`,
             input_message_content:
               {message_text: 'Registration Set workId ' + workId}
           })
@@ -198,7 +200,7 @@ function getRegistrationInlineResults(query) {
             type: 'article',
             title: `Деталь ${detailNum}: ${quantity} шт.`,
             input_message_content: {
-              message_text: 'Registration Set detailNum ' + detailNum
+              message_text: 'Registration SetDetailNum _ ' + detailNum
             }
           })
         }
@@ -206,8 +208,8 @@ function getRegistrationInlineResults(query) {
     }
   }
 
-  results = fillIfEmpty(results, query)
-  return results
+  const notEmptyResults = fillIfEmpty(results, query)
+  return notEmptyResults
 }
 
 function getTablesRegistration(what) {
@@ -669,6 +671,27 @@ function showRegistrationMenu(freshly=null) {
     user.reg.workType = theWork ? theWork.workType : null
     user.reg.work = theWork ? theWork.work : null
   }
+  if (user.reg.allDetailsAtOnce === 'true'){
+    const allDetails = getCachedTables().catalogOrders[user.reg.orderNum]
+    const resDetails = []
+    let sum = 0
+    for (const detailNum in allDetails) {
+      const works = allDetails[detailNum]
+      for (const workId in works) {
+        const quantity = works[workId]
+      // printToSGOncePerValue('workId ' + workId)
+        if (quantity > 0 && workId === user.reg.workId){
+          resDetails.push({detailNum, quantity})
+          sum += quantity
+        }
+      }
+    }
+    user.reg.allDetailsAtOnce = resDetails
+    user.reg.detailNum = `${resDetails.map(o=>o.detailNum).join(', ')}`
+    user.reg.quantity = `${resDetails.map(o=>o.quantity).join('+')} = ${sum}`
+    saveUser()
+  }
+
   const text = `Для отчёта о работе заполни форму:
 № заказа: ${user.reg.orderNum || '-'}
 Вид работ: ${user.reg.workType || '-'}
@@ -693,7 +716,7 @@ function createButtonsRegistrationMenu() {
   let confirmCall = 'pass'
   let confirmText = '(Поля не заполнены)'
   let quantity
-  if (user.reg.detailNum){
+  if (user.reg.detailNum && !user.reg.allDetailsAtOnce){
     quantity = getCachedTables()
       .catalogOrders[user.reg.orderNum][user.reg.detailNum][user.reg.workId]
     if (quantity > 1){
@@ -726,18 +749,19 @@ function createButtonsRegistrationMenu() {
   if (user.reg.workId) btnWork.text = `${user.reg.workType}: ${user.reg.work}`
 
   const btnDetailNum = {text: 'Выбрать № детали'}
-  if (user.reg.detailNum) btnDetailNum.text =
+  if (user.reg.detailNum && !user.reg.allDetailsAtOnce) btnDetailNum.text =
     `Выбрана деталь № ${user.reg.detailNum} (остаток ${quantity} шт.)`
 
   return [
-      [{text: btnOrderNum.text,  switch_inline_query_current_chat: 'ShowOrderNums '}],
-      [{text: btnWork.text,      switch_inline_query_current_chat: 'ShowWorks '}],
-      [{text: btnDetailNum.text, switch_inline_query_current_chat: 'ShowDetailNums '}],
-      [{text: maxText,           callback_data: maxCall},
-       {text: minText,           callback_data: minCall},
-       {text: manualText,        callback_data: `pass` }],
-      [{text: `Назад`,           callback_data: `Меню НазадГлавное`},
-       {text: confirmText,       callback_data: confirmCall}]
+      [{text: btnOrderNum.text,   switch_inline_query_current_chat: 'ShowOrderNums '}],
+      [{text: btnWork.text,       switch_inline_query_current_chat: 'ShowWorks '}],
+      [{text: 'Выбрать все детали',callback_data: 'Registration Set allDetailsAtOnce true'}],
+      [{text: btnDetailNum.text,  switch_inline_query_current_chat: 'ShowDetailNums '}],
+      [{text: maxText,            callback_data: maxCall},
+       {text: minText,            callback_data: minCall},
+       {text: manualText,         callback_data: `pass` }],
+      [{text: `Назад`,            callback_data: `Меню НазадГлавное`},
+       {text: confirmText,        callback_data: confirmCall}]
   ]
 }
 
@@ -978,7 +1002,8 @@ function setValuesUnderLastRow(sheetName, column, twoDimensionalArray, ssId = ss
   const row = curRange.getNextDataCell(SpreadsheetApp.Direction.UP).getLastRow() + 1
   const col = curRange.getLastColumn()
   const numRows = twoDimensionalArray.length
-  const numCols = Math.max(twoDimensionalArray.map(row => row.length))
+  const rowLenghts = twoDimensionalArray.map(row => row.length);
+  const numCols = Math.max(...rowLenghts)
   const newRange = sheet.getRange(row, col, numRows, numCols)
   newRange.setValues(twoDimensionalArray)
 }
@@ -1023,6 +1048,10 @@ function processRegistration() {
       user.reg[attrName] = values.join(' '); break
     case 'Apply':
       applyRegistration(); return
+    case 'SetDetailNum':
+      user.reg.detailNum = values.join(' ')
+      user.reg.allDetailsAtOnce = null
+      break
   }
   saveUser()
   if (user.message) deleteLastMessage()
@@ -1032,18 +1061,31 @@ function processRegistration() {
 function applyRegistration() {
   addCurrentFuncToTrace()
   const uR = user.reg
-  tableRegistrationAppend(user.lastVisit, user.id, uR.workType, uR.work,  uR.orderNum,  uR.detailNum, uR.quantity)
+  const cachedTables1 = getCachedTables()
+  if (user.reg.allDetailsAtOnce){
+    const data = []
+    for (const item of user.reg.allDetailsAtOnce) {
+      data.push([user.lastVisit, user.id, uR.workType, uR.work, uR.orderNum,
+                item.detailNum, item.quantity])
+      const detail = cachedTables1.catalogOrders[uR.orderNum][item.detailNum];
+      detail[uR.workId] -= item.quantity
+      cachedTables1.catalogOrders[uR.orderNum][item.detailNum] = detail
+    }
+    tableRegistrationAppend(data)
+    user.reg.workId = null
+  }
+  else {
+    tableRegistrationAppend(user.lastVisit, user.id, uR.workType, uR.work, uR.orderNum, uR.detailNum, uR.quantity)
+    const detail = cachedTables1.catalogOrders[uR.orderNum][uR.detailNum];
+    detail[uR.workId] -= uR.quantity
+    cachedTables1.catalogOrders[uR.orderNum][uR.detailNum] = detail
+  }
+  saveCachedTables(cachedTables1)
   const text = user.menuMessage.text.replace('Для отчёта о работе заполни форму',
                                              '👌 Отчёт о работе принят')
-  const cachedTables1 = getCachedTables();
-  const detail = cachedTables1.catalogOrders[uR.orderNum][uR.detailNum];
-  detail[uR.workId] -= uR.quantity
-  cachedTables1.catalogOrders[uR.orderNum][uR.detailNum] = detail
-  saveCachedTables(cachedTables1)
-
-
   user.reg.quantity = null
   user.reg.detailNum = null
+  user.reg.allDetailsAtOnce = null
   saveUser()
 
   editAndForgetMenuMessage(text)
@@ -1052,7 +1094,9 @@ function applyRegistration() {
 
 function tableRegistrationAppend(){
   addCurrentFuncToTrace()
-  const data = [[].slice.call(arguments)]
+  const args = [].slice.call(arguments)
+  const isTwoDimentional = Object.prototype.toString.call(args[0]) === '[object Array]'
+  const data = isTwoDimentional ? args[0] : [args]
   setValuesUnderLastRow('ЖУРНАЛ РАБОТ', 2, data, ssIdColSdelkaDetWorks)
 }
 
@@ -1275,6 +1319,13 @@ function printToSG(text) {
 function printToSGOnce(text) {
   if (printToSGCounter === 0){
     printToSGCounter++
+    printToSG(text)
+  }
+}
+
+function printToSGOncePerValue(text) {
+  if (!printToSGValues.includes(text)){
+    printToSGValues.push(text)
     printToSG(text)
   }
 }
