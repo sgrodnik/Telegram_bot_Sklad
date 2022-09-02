@@ -517,7 +517,7 @@ function answerInlineQuery(inline_query_id, results){
       method: 'answerInlineQuery',
       inline_query_id: String(inline_query_id),
       results: JSON.stringify(results),
-      cache_time: Number(0)
+      cache_time: Number(10)
     }
   }
   UrlFetchApp.fetch(base, data)
