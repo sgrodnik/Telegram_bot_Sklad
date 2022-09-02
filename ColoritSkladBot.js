@@ -706,7 +706,8 @@ function cacheRegistrationTables() {
 }
 
 function getCachedTables() {
-  return cachedTables || JSON.parse(props.getProperty('cachedTables'))
+  cachedTables = cachedTables || JSON.parse(props.getProperty('cachedTables'))
+  return cachedTables
 }
 
 function saveCachedTables(obj) {
