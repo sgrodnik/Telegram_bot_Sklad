@@ -1,4 +1,6 @@
 // wrapper: https://script.google.com/home/projects/1xxcmtRKO5Xe7a0dBeZ_Ypo-s-5xgam9-loG-Nsd1RfcfGkpLa1CY0UYz/edit
+const startTime = new Date()
+let prevTime = new Date()
 const base = 'https://api.telegram.org/bot' + token + '/'
 const ssIdSpisanieColorit = '1dldSXJPoAj0Ni5G-LuklyOhBIqTn_BIfkMt5oeO4EoI'
 const ssIdColSdelkaDetWorks = '1BusvTFU8zoEIg727bk6IxBe88S-B2WfFxLHux7xc4BY'
@@ -28,8 +30,11 @@ function doPost(e){
   catch(err){
     // const text = `${err}\n\nUser: ${JSON.stringify(user, null, 4)}`
     const text = `Ошибка ${err}`
-    printToSG(`Ошибка ${err}, подробности в логе`)
-    log('errorLog', `${err}\nUser: ${JSON.stringify(user)}`)
+    printToSG(`Ошибка, подробности в логе (${user.name})\n${err}`)
+    const now = new Date();
+    const scriptDuration = now - startTime
+    printToSG(`_Error timings_\nscriptDuration: ${scriptDuration}\n${getTimings()}`)
+    log('errorLog', `${err}\nUser:\n${JSON.stringify(user)}`)
     // tableAppend(now(), 'Ошибка', text)
   }
 }
@@ -51,8 +56,27 @@ function printLog(logName) {
   console.log(`${logName} size is ${getSizeInKb(str)}, it contains ${updateLog.length} items`)
 }
 
+
+function clearLog(logName) {
+  props.setProperty(logName, JSON.stringify([]))
+  console.log(`${logName} is cleared`)
+}
+
 function printUpdateLog(){ printLog('updateLog') }
 function printErrorLog(){ printLog('errorLog') }
+function printTimingLog(){ printLog('timingLog') }
+
+function clearErrorLog(){ clearLog('errorLog') }
+
+function getTimings(unbornUser=null) {
+  let s = `Total: ${(unbornUser || user).debug.functionsTotal}\n(start)`
+  const total = (unbornUser || user).debug.functions.map(o=>o.dur).reduce((partialSum, a) => partialSum + a, 0)
+  for (const fun of (unbornUser || user).debug.functions) {
+    const percentage = fun.dur / total * 100;
+    s += `${Math.round(percentage)}% ${fun.dur} ms\n${fun.name}flag\n`
+  }
+  return s.replaceAll('flag\n', ' ')
+}
 
 function createOrFetchUser() {
   const paramName = update.message ? 'message'
@@ -65,15 +89,21 @@ function createOrFetchUser() {
     writeOff: Object(),
     addition: Object(),
     reg: Object(),
-    messages: []
+    messages: [],
+    visits: 1
   }
+  user.visits > 0 ? user.visits++ : user.visits = 1
   user.id = param.from.id
   user.name = param.from.first_name || param.from.username || param.from.last_name
   user.message = update.message
   user.inline_query = update.inline_query
   user.callback_query = update.callback_query
+  user.prevVisit=JSON.parse(JSON.stringify(user.lastVisit))
   user.lastVisit = new Date()
-  user.debug = {functions: [arguments.callee.name]}
+  const dur = new Date() - prevTime
+  prevTime = new Date()
+  log('timingLog', `${user.prevVisit}\n${user.name}\n${getTimings(user)}`)
+  user.debug = {functions: [{dur, name: arguments.callee.name}]}
   user.rights = getRigths()
 }
 
@@ -106,7 +136,12 @@ function getRigths() {
 }
 
 function addCurrentFuncToTrace() {
-  user.debug.functions.push(arguments.callee.caller.name)
+  const dur = new Date() - prevTime
+  prevTime = new Date()
+  const name = arguments.callee.caller.name;
+  // user.debug.functions.push(`+${duration}ms: ${name}`)
+  user.debug.functions.push({dur, name})
+  user.debug.functionsTotal = new Date() - startTime
   saveUser()
 }
 
@@ -1164,6 +1199,12 @@ function sendMessageToUser(text, keyboard=null){
 }
 
 function sendMessage(chatId, text, keyboard=null){
+  const MAX_LENGTH = 4096;
+  if (text.length > MAX_LENGTH){
+    const prefix = `(Сообщение усечено до 4096 символов)\n`;
+    const truncated = text.slice(0, MAX_LENGTH - prefix.length);
+    text = prefix + truncated
+  }
   let data = {
     method: 'post',
     payload: {
@@ -1405,7 +1446,7 @@ function regularSelfCleaning() {
       const now = new Date()
       const messageDate = new Date(message.date)
       const hoursPassed = Math.abs(now - messageDate) / 36e5
-      if (hoursPassed > 46){
+      if (hoursPassed > 46 && hoursPassed < 48){
         deleteMessage(user.id, message.id)
         const logObject = {
           messageId: message.id,
