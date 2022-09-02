@@ -33,14 +33,28 @@ function doPost(e){
     printToSG(`Ошибка, подробности в логе (${user.name})\n${err}`)
     const now = new Date();
     const scriptDuration = now - startTime
-    printToSG(`_Error timings_\nscriptDuration: ${scriptDuration}\n${getTimings()}`)
-    log('errorLog', `${err}\nUser:\n${JSON.stringify(user)}`)
+    // printToSG(`_Error timings_\nscriptDuration: ${scriptDuration}\n${getTimings()}`)
+    const logUser = {
+      name: user.name,
+      id: user.id,
+      prevVisit: user.prevVisit,
+      lastVisit: user.lastVisit,
+      debug: user.debug,
+      rights: user.rights,
+      writeOff: user.writeOff,
+      addition: user.addition,
+      reg: user.reg,
+      message: user.message,
+      inline_query: user.inline_query,
+      callback_query: user.callback_query,
+    }
+    log('errorLog', `${err}\nUser:\n${JSON.stringify(logUser)}`)
     // tableAppend(now(), 'Ошибка', text)
   }
 }
 
 function log(logName, text) {
-  const MAX_LOG_LENGTH = 100
+  const MAX_LOG_LENGTH = 60
   const updateLog = JSON.parse(props.getProperty(logName)) || []
   updateLog.push(`${new Date()}: ${text}`)
   if (updateLog.length > MAX_LOG_LENGTH) updateLog.shift()
