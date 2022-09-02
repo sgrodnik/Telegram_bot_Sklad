@@ -775,20 +775,21 @@ function createButtonsRegistrationMenu() {
   let confirmText = '(Поля не заполнены)'
   let quantity
   if (user.reg.detailNum && !user.reg.allDetailsAtOnce){
-    quantity = getCachedTables()
-      .catalogOrders[user.reg.orderNum][user.reg.detailNum][user.reg.workId]
-    if (quantity > 1){
-      maxCall = `Registration Set quantity ${quantity}`
-      maxText = `Все ${quantity} шт.`
-      minCall = `Registration Set quantity ${1}`
-      minText = '1 шт.'
-      manualText = '(либо введи)'
+    const order = getCachedTables().catalogOrders[user.reg.orderNum];
+    if (user.reg.detailNum in order) {
+      quantity = order[user.reg.detailNum][user.reg.workId]
+      if (quantity > 1) {
+        maxCall = `Registration Set quantity ${quantity}`
+        maxText = `Все ${quantity} шт.`
+        minCall = `Registration Set quantity ${1}`
+        minText = '1 шт.'
+        manualText = '(либо введи)'
+      }
+      if (quantity === 1) {
+        minCall = `Registration Set quantity ${1}`
+        minText = 'Всего 1 шт.'
+      }
     }
-    if (quantity === 1){
-      minCall = `Registration Set quantity ${1}`
-      minText = 'Всего 1 шт.'
-    }
-
   }
   if (
     user.reg.workId &&
