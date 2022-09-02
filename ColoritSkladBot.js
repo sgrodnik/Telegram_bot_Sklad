@@ -1124,6 +1124,7 @@ function processRegistration() {
       applyRegistration(); return
     case 'SetDetailNum':
       user.reg.detailNum = values.join(' ')
+      user.reg.quantity = null
       user.reg.allDetailsAtOnce = null
       break
   }
