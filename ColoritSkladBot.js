@@ -1136,6 +1136,7 @@ function processRegistration() {
 function applyRegistration() {
   addCurrentFuncToTrace()
   const uR = user.reg
+  if (!user.reg.quantity || !user.reg.detailNum) return
   const cachedTables1 = getCachedTables()
   if (user.reg.allDetailsAtOnce){
     const data = []
