@@ -79,6 +79,7 @@ function clearLog(logName) {
 function printUpdateLog(){ printLog('updateLog') }
 function printErrorLog(){ printLog('errorLog') }
 function printTimingLog(){ printLog('timingLog') }
+function printScriptLog(){ printLog('scriptLog') }
 
 function clearErrorLog(){ clearLog('errorLog') }
 
@@ -162,9 +163,11 @@ function addCurrentFuncToTrace() {
 function processUpdate(){
   addCurrentFuncToTrace()
   if(user.inline_query){
+    user.debug.sentData = {type: 'inline_query', data: user.inline_query.query}
     processInlineQuery()
   }
   if(user.callback_query){
+    user.debug.sentData = {type: 'callback_query', data: user.callback_query.data}
     if(user.callback_query.data.startsWith('Списать'))      writeOff()
     if(user.callback_query.data.startsWith('Меню'))         switchMenu()
     if(user.callback_query.data.startsWith('ТройноеМеню'))  updateTrioMenu()
@@ -172,6 +175,7 @@ function processUpdate(){
     if(user.callback_query.data.startsWith('Registration')) processRegistration()
   }
   if(user.message && user.message.text){
+    user.debug.sentData = {type: 'message', data: user.message.text}
     if(user.message.text.startsWith('/section'))          setSection()
     else if(user.message.text.startsWith('/s'))           greetUser()
     else if(user.message.text.startsWith('Выбрать'))      selectMat()
@@ -180,6 +184,12 @@ function processUpdate(){
     else if(isFloat(user.message.text))                   confirmAmount()
     else if(user.message)                                 incorrectInput()
   }
+  user.debug.scriptStart = startTime
+  user.debug.scriptEnd = new Date()
+  user.debug.scriptDur = new Date() - startTime
+  user.debug.functions = []
+  const logUser = {name: user.name, id: user.id, debug: user.debug}
+  log('scriptLog',JSON.stringify(logUser))
   // todo оповестить о непонятке и удалить
 }
 
