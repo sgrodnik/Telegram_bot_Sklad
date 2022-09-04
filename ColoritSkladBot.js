@@ -110,15 +110,17 @@ function createOrFetchUser() {
   user.visits > 0 ? user.visits++ : user.visits = 1
   user.id = param.from.id
   user.name = param.from.first_name || param.from.username || param.from.last_name
+  user.debug = {}
+  user.debug.functions = []
   user.message = update.message
   user.inline_query = update.inline_query
   user.callback_query = update.callback_query
-  user.prevVisit=JSON.parse(JSON.stringify(user.lastVisit))
+  user.prevVisit=user.lastVisit ? JSON.parse(JSON.stringify(user.lastVisit)) : null
   user.lastVisit = new Date()
   const dur = new Date() - prevTime
   prevTime = new Date()
   log('timingLog', `${user.prevVisit}\n${user.name}\n${getTimings(user)}`)
-  user.debug = {functions: [{dur, name: arguments.callee.name}]}
+  user.debug.functions = [{dur, name: arguments.callee.name}]
   user.rights = getRigths()
 }
 
@@ -747,7 +749,7 @@ function getSizeInKb(string) {
   return size + ' Kb';
 }
 
-function showRegistrationMenu(freshly=null) {
+function showRegistrationMenu() {
   addCurrentFuncToTrace()
   if (user.reg.workId){
     const theWork = getCachedTables().catalogWorks[user.reg.workId]
