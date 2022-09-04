@@ -67,7 +67,7 @@ function printLog(logName) {
   for (const item of updateLog) {
     console.log(item)
   }
-  console.log(`${logName} size is ${getSizeInKb(str)}, it contains ${updateLog.length} items`)
+  console.log(`${logName} size is ${getSizeInKb(str)} (${updateLog.length} items)`)
 }
 
 
@@ -556,7 +556,8 @@ function writeOff() {
   const [matName, matId] = user.writeOff.matNameAndMatId
   const message = callbackQuery.message
   const date = toDate(message.date)
-  tableAppend(date, user.id, matId, amount)
+  if (isUserAuthorized())
+    tableAppend(date, user.id, matId, amount)
   let residue = 0
   for (const row of getTableStorage()) {
     if(String(row[0]) === matId){
@@ -667,13 +668,13 @@ function switchMenu(act=null) {
   const action = act || user.callback_query.data.replace('Меню ', '')
   switch (action.split(' ')[0]) {
     case 'Списание':
-      if (user.rights.writeOff.any) user.menuSection = 'WriteOffMenu'
+      if (!isUserAuthorized() || user.rights.writeOff.any) user.menuSection = 'WriteOffMenu'
       break
     case 'Добавление':
-      if (user.rights.addition.any) user.menuSection = 'AddMenu'
+      if (!isUserAuthorized() || user.rights.addition.any) user.menuSection = 'AddMenu'
       break
     case 'Регистрация':
-      if (user.rights.registration.any) {
+      if (!isUserAuthorized() || user.rights.registration.any) {
         user.menuSection = 'RegistrationMenu'
         cacheRegistrationTables()
         showRegistrationMenu()
@@ -1065,9 +1066,11 @@ function makeAddition() {
   addCurrentFuncToTrace()
   const uA = user.addition
   const date = toDate(user.callback_query.message.date)
-  tableNewPaintAppend(uA.matName, uA.supplier, uA.order, uA.rack,
-                      uA.shelf, uA.amount, date, getEmployeeName(user.id))
-  const text = `👌 Добавлено ${uA.amount} кг ${clear(uA.matName)} от ${uA.supplier}, место ${uA.rack}-${uA.shelf}`
+  if (isUserAuthorized())
+    tableNewPaintAppend(uA.matName, uA.supplier, uA.order, uA.rack,
+                        uA.shelf, uA.amount, date, getEmployeeName(user.id))
+  const demo = isUserAuthorized() ? '' : ' <tg-spoiler>, Демо-режим</tg-spoiler>'
+  const text = `👌 Добавлено ${uA.amount} кг ${clear(uA.matName)} от ${uA.supplier}, место ${uA.rack}-${uA.shelf}${demo}`
   editMenuMessage(text)
   user.addition = {}
   user.menuSection = null
@@ -1159,18 +1162,20 @@ function applyRegistration() {
       detail[uR.workId] -= item.quantity
       cachedTables1.catalogOrders[uR.orderNum][item.detailNum] = detail
     }
-    tableRegistrationAppend(data)
+    if (isUserAuthorized()) tableRegistrationAppend(data)
     user.reg.workId = null
   }
   else {
-    tableRegistrationAppend(user.lastVisit, user.id, uR.workType, uR.work, uR.orderNum, uR.detailNum, uR.quantity)
+    if (isUserAuthorized()) tableRegistrationAppend(user.lastVisit, user.id,
+      uR.workType, uR.work, uR.orderNum, uR.detailNum, uR.quantity)
     const detail = cachedTables1.catalogOrders[uR.orderNum][uR.detailNum];
     detail[uR.workId] -= uR.quantity
     cachedTables1.catalogOrders[uR.orderNum][uR.detailNum] = detail
   }
   saveCachedTables(cachedTables1)
+  const demo = isUserAuthorized() ? '' : ' <tg-spoiler>, Демо-режим</tg-spoiler>'
   const text = user.menuMessage.text.replace('Для отчёта о работе заполни форму',
-                                             '👌 Отчёт о работе принят')
+                                             `👌 Отчёт о работе принят${demo}`)
   user.reg.quantity = null
   user.reg.detailNum = null
   user.reg.allDetailsAtOnce = null
