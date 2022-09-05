@@ -9,7 +9,7 @@ const props = PropertiesService.getScriptProperties()
 
 let update
 let user
-let cachedTables
+let cachedTables = {}
 const cachedSss = {}
 let printToSGCounter = 0
 let printToSGValues= []
@@ -126,7 +126,7 @@ function createOrFetchUser() {
 
 function getRigths() {
   addCurrentFuncToTrace()
-  const table = getTableUserRights()
+  const table = getCachedTables().catalogRights || cacheRightsTable().catalogRights
   const titles = table[2]
   const writeOff = {any: false}
   const addition = {any: false}
@@ -632,7 +632,7 @@ function deleteMessage(chatId, messageId){
       chat_id: String(chatId),
       message_id: Number(messageId)
     },
-    // muteHttpExceptions: true
+    muteHttpExceptions: true
   }
   try {
     UrlFetchApp.fetch(base, data)
@@ -725,15 +725,26 @@ function cacheRegistrationTables() {
       catalogOrders[orderNum][detailNum][workId] = quantity
     }
   }
-  cachedTables = {
-    catalogOrders: catalogOrders,
-    catalogWorks: catalogWorks
-  }
-  saveCachedTables(cachedTables)
+  const ct = getCachedTables()
+  ct.catalogOrders = catalogOrders
+  ct.catalogWorks = catalogWorks
+  saveCachedTables(ct)
+}
+
+function cacheRightsTable() {
+  addCurrentFuncToTrace()
+  const ct = getCachedTables()
+  ct.catalogRights = getSs(ssIdSpisanieColorit)
+    .getSheetByName('ПОЛЬЗОВАТЕЛИ')
+    .getDataRange()
+    .getValues()
+  saveCachedTables(ct)
+  return ct
 }
 
 function getCachedTables() {
-  cachedTables = cachedTables || JSON.parse(props.getProperty('cachedTables'))
+  if (Object.keys(cachedTables).length > 0) return cachedTables
+  else cachedTables = JSON.parse(props.getProperty('cachedTables'))
   return cachedTables
 }
 
@@ -1199,6 +1210,7 @@ function setSection() {
   deleteLastMessage()
   switch (section) {
     case '0': {
+      cacheRightsTable()
       if (user.menuMessage) {
         const [messageId, _] = Object.values(user.menuMessage)
         deleteMessage(user.id, messageId)
