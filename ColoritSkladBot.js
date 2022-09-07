@@ -254,6 +254,7 @@ function getRegistrationInlineResults(query) {
             const work = getCachedTables().catalogWorks[workId]
           if (isQueryAndIsNotIncludedIn(query, work.workStr)) continue
           if (uniqueWorks.includes(workId)) continue
+          if (!work.work) continue
           uniqueWorks.push(workId)
           counter++
           results.push({
@@ -720,6 +721,8 @@ function cacheRegistrationTables() {
     for (let i = 4; i < numColumns; i++) { // todo проверить последний столбец
       const quantity = row[i]
       if (quantity <= 0) continue
+      if (!works[0][i] || works[0][i].length < 1) continue
+      if (!works[2][i] || works[2][i].length < 1) continue
       const workStr = `${i}::${works[0][i]}::${works[2][i]}`
       const workId = `${i}`
       catalogWorks[i] = {workType: works[0][i], work: works[2][i], workStr: workStr}
