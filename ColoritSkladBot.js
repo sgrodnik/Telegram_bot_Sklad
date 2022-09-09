@@ -251,6 +251,8 @@ function getRegistrationInlineResults(query) {
       for (const detailNum in details) {
         const works = details[detailNum]
         for (const workId in works) {
+          const quantity = works[workId];
+          if (quantity < 1) continue
             const work = getCachedTables().catalogWorks[workId]
           if (isQueryAndIsNotIncludedIn(query, work.workStr)) continue
           if (uniqueWorks.includes(workId)) continue
