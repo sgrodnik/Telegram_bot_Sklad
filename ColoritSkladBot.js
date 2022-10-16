@@ -59,7 +59,7 @@ function deleteUser(userId) {
   props.deleteProperty(`User ${userId}`)
 }
 
-function deleteUserG() {
+function _deleteUserG() {
   const SGrodnikChatId = 326258443
   const OGrodnikChatId = 373197116
   deleteUser(SGrodnikChatId)
@@ -93,13 +93,13 @@ function clearLog(logName) {
   console.log(`${logName} is cleared`)
 }
 
-function printUpdateLog(){ printLog('updateLog') }
-function printErrorLog(){ printLog('errorLog') }
-function printTimingLog(){ printLog('timingLog') }
-function printScriptLog(){ printLog('scriptLog') }
+function _printUpdateLog(){ printLog('updateLog') }
+function _printErrorLog(){ printLog('errorLog') }
+function _printTimingLog(){ printLog('timingLog') }
+function _printScriptLog(){ printLog('scriptLog') }
 
-function clearErrorLog(){ clearLog('errorLog') }
-function clearUpdateLog(){ clearLog('updateLog') }
+function _clearErrorLog(){ clearLog('errorLog') }
+function _clearUpdateLog(){ clearLog('updateLog') }
 
 function getTimings(unbornUser=null) {
   let s = `Total: ${(unbornUser || user).debug.functionsTotal}\n(start)`
