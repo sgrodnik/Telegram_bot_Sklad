@@ -808,33 +808,18 @@ function showRegistrationMenu() {
     user.reg.workType = theWork ? theWork.workType : null
     user.reg.work = theWork ? theWork.work : null
   }
-  if (user.reg.allDetailsAtOnce === 'true'){
-    const allDetails = getCachedTables().catalogOrders[user.reg.orderNum]
-    const resDetails = []
-    let sum = 0
-    for (const detailNum in allDetails) {
-      const works = allDetails[detailNum]
-      for (const workId in works) {
-        const quantity = works[workId]
-      // printToSGOncePerValue('workId ' + workId)
-        if (quantity > 0 && workId === user.reg.workId){
-          resDetails.push({detailNum, quantity})
-          sum += quantity
-        }
-      }
-    }
-    user.reg.allDetailsAtOnce = resDetails
-    user.reg.detailNum = `${resDetails.map(o=>o.detailNum).join(', ')}`
-    user.reg.quantity = `${resDetails.map(o=>o.quantity).join('+')} = ${sum}`
-    saveUser()
+  user.reg.detailNum = 'Не выбраны'
+  user.reg.quantity = '0'
+  if (user.reg.detailNums && user.reg.detailNums.length > 0) {
+    user.reg.detailNum = `${user.reg.detailNums.map(o=>o.detailNum).join(', ')}`
+    const sum = getSum(user.reg.detailNums.map(o=>o.quantity))
+    user.reg.quantity = `${user.reg.detailNums.map(o=>o.quantity).join('+')} = ${sum}`
   }
-
   const text = `Для отчёта о работе заполни форму:
 № заказа: ${user.reg.orderNum || '-'}
-Вид работ: ${user.reg.workType || '-'}
-Работа: ${user.reg.work || '-'}
-№ детали: ${user.reg.detailNum || '-'}
-Количество деталей: ${user.reg.quantity || '-'}`
+Работа: ${user.reg.workType || '-'} / ${user.reg.work || '-'}
+№ детали: ${user.reg.detailNum}
+Количество: ${user.reg.quantity}`
   const keyboard = {inline_keyboard: createButtonsRegistrationMenu()}
   if (user.menuMessage) editMenuMessage(text, keyboard)
   else {
@@ -843,38 +828,20 @@ function showRegistrationMenu() {
   }
 }
 
+function getSum(arr) {
+  addCurrentFuncToTrace()
+  return arr.map(n=>Number(n)).reduce((partialSum, a) => partialSum + a, 0);
+}
+
 function createButtonsRegistrationMenu() {
   addCurrentFuncToTrace()
-  let maxCall = 'pass'
-  let maxText = ' '
-  let minCall = 'pass'
-  let minText = ' '
-  let manualText = ' '
   let confirmCall = 'pass'
   let confirmText = '(Поля не заполнены)'
-  let quantity
-  if (user.reg.detailNum && !user.reg.allDetailsAtOnce){
-    const order = getCachedTables().catalogOrders[user.reg.orderNum];
-    if (user.reg.detailNum in order) {
-      quantity = order[user.reg.detailNum][user.reg.workId]
-      if (quantity > 1) {
-        maxCall = `Registration Set quantity ${quantity}`
-        maxText = `Все ${quantity} шт.`
-        minCall = `Registration Set quantity ${1}`
-        minText = '1 шт.'
-        manualText = '(либо введи)'
-      }
-      if (quantity === 1) {
-        minCall = `Registration Set quantity ${1}`
-        minText = 'Всего 1 шт.'
-      }
-    }
-  }
   if (
     user.reg.workId &&
     user.reg.orderNum &&
-    user.reg.detailNum &&
-    user.reg.quantity
+    user.reg.detailNums &&
+    user.reg.detailNums.length > 0
   ) {
     confirmCall = 'Registration Apply'
     confirmText = 'Готово ✓'
@@ -886,21 +853,49 @@ function createButtonsRegistrationMenu() {
   const btnWork = {text: 'Выбрать работу'}
   if (user.reg.workId) btnWork.text = `${user.reg.workType}: ${user.reg.work}`
 
-  const btnDetailNum = {text: 'Выбрать № детали'}
-  if (user.reg.detailNum && !user.reg.allDetailsAtOnce) btnDetailNum.text =
-    `Выбрана деталь № ${user.reg.detailNum} (остаток ${quantity} шт.)`
-
   return [
       [{text: btnOrderNum.text,   switch_inline_query_current_chat: 'ShowOrderNums '}],
       [{text: btnWork.text,       switch_inline_query_current_chat: 'ShowWorks '}],
-      [{text: 'Выбрать все детали',callback_data: 'Registration Set allDetailsAtOnce true'}],
-      [{text: btnDetailNum.text,  switch_inline_query_current_chat: 'ShowDetailNums '}],
-      [{text: maxText,            callback_data: maxCall},
-       {text: minText,            callback_data: minCall},
-       {text: manualText,         callback_data: `pass` }],
+      [{text: 'Выбрать все детали',callback_data: 'Registration SelectAllDetails'},
+         {text: 'Снять выбор'       ,callback_data: 'Registration SelectNoDetails'}],
+      ...createButtonsForEveryDetail(),
       [{text: `Назад`,            callback_data: `Меню НазадГлавное`},
        {text: confirmText,        callback_data: confirmCall}]
   ]
+}
+
+function createButtonsForEveryDetail() {
+  addCurrentFuncToTrace()
+  const catalog = getCachedTables().catalogOrders
+  const buttons = []
+
+  for (const orderNum in catalog) {
+    if (user.reg.orderNum !== orderNum) continue
+    const details = catalog[orderNum]
+    for (const detailNum in details) {
+      const works = details[detailNum]
+      for (const workId in works) {
+        if (user.reg.workId !== workId) continue
+        const quantity = works[workId]
+        if (quantity <= 0) continue
+        const c = user.reg.detailNums &&
+          user.reg.detailNums.map(o=>o.detailNum).includes(detailNum) ? '👉' : ''
+        buttons.push({ "text": `${c}Деталь ${detailNum}: ${quantity} шт.`,
+          'callback_data': `Registration Add detailNums ${detailNum} ${quantity}`})
+      }
+    }
+  }
+  if (buttons.length % 3 > 0)
+    buttons.push({ "text": ` `, 'callback_data': `Pass`})
+  if (buttons.length % 3 > 0)
+    buttons.push({ "text": ` `, 'callback_data': `Pass`})
+
+  let count = buttons.length;
+  const buttonRows = []
+  for (const i of [...Array(count / 3).keys()]) {
+    buttonRows.push([buttons[i], buttons[i + count / 3], buttons[i + count / 3 * 2]])
+  }
+  return buttonRows
 }
 
 function createButtons() {
@@ -1191,7 +1186,37 @@ function processRegistration() {
     case 'SetDetailNum':
       user.reg.detailNum = values.join(' ')
       user.reg.quantity = null
-      user.reg.allDetailsAtOnce = null
+      break
+    case 'Add':
+      if (attrName !== 'detailNums') throw Error(`Add: Атрибут не распознан: ${attrName}`)
+      if (!user.reg.detailNums)
+        user.reg.detailNums = []
+      const detailNum = values[0]
+      const quantity = values[1]
+      if (user.reg.detailNums.map(o=>o.detailNum).includes(detailNum))
+        user.reg.detailNums = user.reg.detailNums.filter(o=>o.detailNum !== detailNum)
+      else
+        user.reg.detailNums.push({detailNum, quantity})
+      break
+    case 'SelectAllDetails':
+      user.reg.detailNums = []
+      const catalog = getCachedTables().catalogOrders
+      for (const orderNum in catalog) {
+        if (user.reg.orderNum !== orderNum) continue
+        const details = catalog[orderNum]
+        for (const detailNum in details) {
+          const works = details[detailNum]
+          for (const workId in works) {
+            if (user.reg.workId !== workId) continue
+            const quantity = works[workId]
+            if (quantity <= 0) continue
+            user.reg.detailNums.push({detailNum, quantity})
+          }
+        }
+      }
+      break
+    case 'SelectNoDetails':
+      user.reg.detailNums = []
       break
   }
   saveUser()
@@ -1204,32 +1229,24 @@ function applyRegistration() {
   const uR = user.reg
   if (!user.reg.quantity || !user.reg.detailNum) return
   const cachedTables1 = getCachedTables()
-  if (user.reg.allDetailsAtOnce){
-    const data = []
-    for (const item of user.reg.allDetailsAtOnce) {
-      data.push([user.lastVisit, user.id, uR.workType, uR.work, uR.orderNum,
-                item.detailNum, item.quantity])
-      const detail = cachedTables1.catalogOrders[uR.orderNum][item.detailNum];
-      detail[uR.workId] -= item.quantity
-      cachedTables1.catalogOrders[uR.orderNum][item.detailNum] = detail
-    }
-    if (isUserAuthorized()) tableRegistrationAppend(data)
-    user.reg.workId = null
+  const data = []
+  for (const item of user.reg.detailNums) {
+    data.push([user.lastVisit, user.id, uR.workType, uR.work, uR.orderNum,
+      item.detailNum, item.quantity])
+    const detail = cachedTables1.catalogOrders[uR.orderNum][item.detailNum];
+    detail[uR.workId] -= item.quantity
+    cachedTables1.catalogOrders[uR.orderNum][item.detailNum] = detail
   }
-  else {
-    if (isUserAuthorized()) tableRegistrationAppend(user.lastVisit, user.id,
-      uR.workType, uR.work, uR.orderNum, uR.detailNum, uR.quantity)
-    const detail = cachedTables1.catalogOrders[uR.orderNum][uR.detailNum];
-    detail[uR.workId] -= uR.quantity
-    cachedTables1.catalogOrders[uR.orderNum][uR.detailNum] = detail
-  }
+  if (isUserAuthorized())
+    tableRegistrationAppend(data)
+  user.reg.workId = null
   saveCachedTables(cachedTables1)
   const demo = isUserAuthorized() ? '' : ' <tg-spoiler>, Демо-режим</tg-spoiler>'
   const text = user.menuMessage.text.replace('Для отчёта о работе заполни форму',
                                              `👌 Отчёт о работе принят${demo}`)
   user.reg.quantity = null
   user.reg.detailNum = null
-  user.reg.allDetailsAtOnce = null
+  user.reg.detailNums = []
   saveUser()
 
   editAndForgetMenuMessage(text)
@@ -1286,6 +1303,7 @@ function sendMessageToUser(text, keyboard=null){
 }
 
 function sendMessage(chatId, text, keyboard=null){
+  text = text || '((Undefined))'
   const MAX_LENGTH = 4096;
   if (text.length > MAX_LENGTH){
     const prefix = `(Сообщение усечено до 4096 символов)\n`;
