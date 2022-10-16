@@ -53,6 +53,16 @@ function doPost(e){
   }
 }
 
+function deleteUser(userId) {
+  const user = JSON.parse(props.getProperty(`User ${userId}`))
+  Logger.log(`User to delete:\n${user}`)
+  props.deleteProperty(`User ${userId}`)
+}
+
+function deleteOG() {
+  deleteUser(373197116)
+}
+
 function log(logName, text) {
   const MAX_LOG_LENGTH = 60
   const updateLog = JSON.parse(props.getProperty(logName)) || []
@@ -124,6 +134,8 @@ function createOrFetchUser() {
     timings = '(Timings error occured)'
   }
   log('timingLog', `${user.prevVisit}\n${user.name}\n${timings}`)
+  if (!user.debug)
+    user.debug = {}
   user.debug.functions = [{dur, name: arguments.callee.name}]
   user.rights = getRigths()
 }
