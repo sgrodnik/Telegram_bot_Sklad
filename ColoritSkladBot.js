@@ -66,10 +66,15 @@ function deleteUserG() {
 }
 
 function log(logName, text) {
-  const MAX_LOG_LENGTH = 60
+  const MAX_LOG_SIZE = 100
+  const MAX_LOG_LEN = 100
   const updateLog = JSON.parse(props.getProperty(logName)) || []
   updateLog.push(`${new Date()}: ${text}`)
-  if (updateLog.length > MAX_LOG_LENGTH) updateLog.shift()
+  let logSize = getSizeInKbAsNumber(JSON.stringify(updateLog));
+  while (logSize > MAX_LOG_SIZE || updateLog.length > MAX_LOG_LEN){
+    updateLog.shift()
+    logSize = getSizeInKbAsNumber(JSON.stringify(updateLog));
+  }
   props.setProperty(logName, JSON.stringify(updateLog))
 }
 
@@ -94,6 +99,7 @@ function printTimingLog(){ printLog('timingLog') }
 function printScriptLog(){ printLog('scriptLog') }
 
 function clearErrorLog(){ clearLog('errorLog') }
+function clearUpdateLog(){ clearLog('updateLog') }
 
 function getTimings(unbornUser=null) {
   let s = `Total: ${(unbornUser || user).debug.functionsTotal}\n(start)`
@@ -782,6 +788,12 @@ function getSizeInKb(string) {
   let size = (encodeURI(string).split(/%..|./).length - 1) / 1024;
   size = Math.round(size * 10) / 10
   return size + ' Kb';
+}
+
+function getSizeInKbAsNumber(string) {
+  let size = (encodeURI(string).split(/%..|./).length - 1) / 1024;
+  size = Math.round(size * 10) / 10
+  return size;
 }
 
 function showRegistrationMenu() {
