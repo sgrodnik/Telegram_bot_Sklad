@@ -188,6 +188,11 @@ function addCurrentFuncToTrace() {
 
 function processUpdate(){
   addCurrentFuncToTrace()
+  // const SGrodnikChatId = 326258443
+  // if (user.id !== SGrodnikChatId){
+  //   sendMessageToUser('🛠 К сожалению, бот закрыт на обслуживание 🛠\nПопробуйте через пару часов, пожалуйста')
+  //   return
+  // }
   if(user.inline_query){
     user.debug.sentData = {type: 'inline_query', data: user.inline_query.query}
     processInlineQuery()
